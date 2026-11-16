@@ -29,6 +29,13 @@ import core
 URLS = ("https://github.com/tpc20001/FusionStitch/releases/latest/download/update.json",
         "https://github.com/tpc20001/FusionStitch-Release/releases/latest/download/update.json")
 EXE = "FusionStitch.exe"
+
+
+def CLOUD_DIR() -> Path:
+    """Where downloads go (never UPDATE\\: older launchers apply every zip found there)."""
+    d = core.PACKAGE_DIR / "cloud"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 FIRST_CHECK_S = 60
 EVERY_S = 6 * 3600
 
@@ -306,17 +313,24 @@ def update(force: bool = False) -> dict:
     def run():
         _low_priority_thread()
         try:
-            if R["need_shell"]:
-                if R["newer_code"]:                             # program too: into UPDATE, the new EXE applies it
-                    _download(info["zip"], core.UPDATE_DIR / f"FS_V{info['version']}_Update.zip", info.get("zip_sha256"),
-                              info.get("zip_size"), f"程式 V{info['version']}")
-                sz = _download(info["shell"], core.UPDATE_DIR / f"FS_Shell_L{info.get('launcher')}.zip", info.get("shell_sha256"),
+            if R["need_shell"] and R["newer_code"]:
+                # the program first (hot update, conversions keep going): the new program then swaps the EXE with its
+                # own, newest swap code when you press 「更新」 again
+                zp = _download(info["zip"], CLOUD_DIR() / f"FS_V{info['version']}_Update.zip",
+                               info.get("zip_sha256"), info.get("zip_size"), f"程式 V{info['version']}")
+                st["msg"] = f"先熱更新程式到 V{info['version']}（轉檔不中斷）；好了之後再按一次「更新」換 EXE"
+                log(f"V{core.APP_VERSION} → V{info['version']}：先熱更新程式，之後再換 EXE")
+                _ui(lambda p=str(zp): _hot(p))
+                st["busy"] = False
+            elif R["need_shell"]:
+                # NOT into UPDATE: an older launcher would treat every zip there as a program update
+                sz = _download(info["shell"], CLOUD_DIR() / f"FS_Shell_L{info.get('launcher')}.zip", info.get("shell_sha256"),
                                info.get("shell_size"), f"EXE 第 {info.get('launcher')} 版")
                 st["msg"] = "下載好了，準備換 EXE（程式會關掉再自動打開）"
                 log(f"EXE 第 {info.get('launcher')} 版下載好了（SHA-256 對過），準備換 EXE")
                 _ui(lambda p=str(sz): swap_exe(p))
             else:
-                zp = _download(info["zip"], core.PACKAGE_DIR / "cloud" / f"FS_V{info['version']}_Update.zip",
+                zp = _download(info["zip"], CLOUD_DIR() / f"FS_V{info['version']}_Update.zip",
                                info.get("zip_sha256"), info.get("zip_size"), f"程式 V{info['version']}")
                 st["msg"] = f"下載好了（SHA-256 對過），熱更新到 V{info['version']}…"
                 log(f"V{core.APP_VERSION} → V{info['version']}（熱更新，轉檔不中斷）")
@@ -386,70 +400,90 @@ def status() -> dict:
 def _bat(shell_zip: str, pid: int) -> Path:
     root = core.ROOT
     okf = core.UPDATE_DIR / "shell_ok.flag"
-    bat = core.UPDATE_DIR / "shell_update.bat"
-    tmp = core.UPDATE_DIR / "shell_new"
+    bat = CLOUD_DIR() / "shell_update.bat"
+    tmp = CLOUD_DIR() / "shell_new"
     logf = core.LOG_DIR / "update_log.txt"
     q = lambda p: str(p).replace("%", "%%")
+    R_, T_, Z_, O_ = q(root), q(tmp), q(shell_zip), q(okf)
     s = f"""@echo off
 chcp 65001 >nul
-title FusionStitch 換 EXE
+title FusionStitch 換 EXE（這個視窗會自己關掉）
 set "LOGF={q(logf)}"
-echo 等 FusionStitch 關掉...
+call :L 開始：等 FusionStitch（PID {int(pid)}）關掉
 set /a N=0
 :wait
+tasklist /FI "PID eq {int(pid)}" /NH 2>nul | find "{int(pid)}" >nul || goto closed
 set /a N+=1
-if %N% GTR 180 goto go
-tasklist /FI "PID eq {int(pid)}" /NH 2>nul | find "{int(pid)}" >nul && (timeout /t 1 /nobreak >nul & goto wait)
-:go
+if %N% GTR 60 goto kill
+timeout /t 1 /nobreak >nul
+goto wait
+:kill
+call :L 等了 60 秒還沒關，強制結束 PID {int(pid)}
+taskkill /F /T /PID {int(pid)} >nul 2>&1
+timeout /t 5 /nobreak >nul
+tasklist /FI "PID eq {int(pid)}" /NH 2>nul | find "{int(pid)}" >nul && (call :L 程式關不掉，這次不換 EXE & exit /b 1)
+:closed
+call :L 程式已經關了
 timeout /t 3 /nobreak >nul
-echo [%date% %time%] [換 EXE] 開始（{q(shell_zip)}） >> "%LOGF%"
-if exist "{q(tmp)}" rmdir /s /q "{q(tmp)}"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath '{q(shell_zip)}' -DestinationPath '{q(tmp)}' -Force"
-if not exist "{q(tmp)}\\{EXE}" goto fail
-if exist "{q(root)}\\_internal_old" rmdir /s /q "{q(root)}\\_internal_old"
-if exist "{q(root)}\\{EXE}.old" del /f /q "{q(root)}\\{EXE}.old"
-if exist "{q(root)}\\_internal" move "{q(root)}\\_internal" "{q(root)}\\_internal_old" >nul
-move "{q(root)}\\{EXE}" "{q(root)}\\{EXE}.old" >nul
-if exist "{q(root)}\\{EXE}" goto restore
-robocopy "{q(tmp)}" "{q(root)}" /E /R:3 /W:2 /NFL /NDL /NJH /NJS /NP >nul
-if not exist "{q(root)}\\{EXE}" goto restore
-if not exist "{q(root)}\\_internal" goto restore
-echo [%date% %time%] [換 EXE] 檔案換好了，打開新的 EXE、等它開起來（最多 3 分鐘） >> "%LOGF%"
-rmdir /s /q "{q(tmp)}"
-if exist "{q(okf)}" del /f /q "{q(okf)}"
-start "" /D "{q(root)}" "{q(root)}\\{EXE}"
+if exist "{T_}" rmdir /s /q "{T_}"
+mkdir "{T_}"
+call :L 解壓縮 {Z_}
+tar -xf "{Z_}" -C "{T_}" >nul 2>&1
+if not exist "{T_}\\{EXE}" (call :L tar 解不開，改用 PowerShell & powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath '{Z_}' -DestinationPath '{T_}' -Force")
+if not exist "{T_}\\{EXE}" (call :L 解壓縮失敗：找不到 {EXE} & goto fail)
+if not exist "{T_}\\_internal" (call :L 解壓縮失敗：找不到 _internal & goto fail)
+if exist "{R_}\\_internal_old" rmdir /s /q "{R_}\\_internal_old"
+if exist "{R_}\\{EXE}.old" del /f /q "{R_}\\{EXE}.old"
+if exist "{R_}\\_internal" move "{R_}\\_internal" "{R_}\\_internal_old" >nul
+if exist "{R_}\\_internal" (call :L 舊的 _internal 搬不走（有檔案被占用） & goto restore)
+move "{R_}\\{EXE}" "{R_}\\{EXE}.old" >nul
+if exist "{R_}\\{EXE}" (call :L 舊的 {EXE} 搬不走 & goto restore)
+call :L 舊的已改名備份，複製新的檔案
+robocopy "{T_}" "{R_}" /E /R:3 /W:2 /NFL /NDL /NJH /NJS /NP >nul
+set RC=%ERRORLEVEL%
+if %RC% GEQ 8 (call :L 複製新檔案失敗（robocopy %RC%） & goto restore)
+if not exist "{R_}\\{EXE}" (call :L 新的 {EXE} 不在 & goto restore)
+if not exist "{R_}\\_internal" (call :L 新的 _internal 不在 & goto restore)
+call :L 檔案換好了，打開新的 EXE、等它回報開成功（最多 3 分鐘）
+rmdir /s /q "{T_}"
+if exist "{O_}" del /f /q "{O_}"
+start "" /D "{R_}" "{R_}\\{EXE}"
 set /a K=0
 :chk
 timeout /t 3 /nobreak >nul
-if exist "{q(okf)}" goto good
+if exist "{O_}" goto good
 set /a K+=1
 if %K% GTR 60 goto slow
 tasklist /FI "IMAGENAME eq {EXE}" /NH 2>nul | find /I "{EXE}" >nul && goto chk
-echo [%date% %time%] [換 EXE] 新的 EXE 開不起來（自己關掉了），換回舊的 >> "%LOGF%"
+call :L 新的 EXE 開不起來（自己關掉了），換回舊的
 goto restore
 :good
-echo [%date% %time%] [換 EXE] 新的 EXE 開起來了，刪掉舊的 >> "%LOGF%"
-del /f /q "{q(okf)}"
-if exist "{q(root)}\\_internal_old" rmdir /s /q "{q(root)}\\_internal_old"
-if exist "{q(root)}\\{EXE}.old" del /f /q "{q(root)}\\{EXE}.old"
+call :L 成功：新的 EXE 開起來了，刪掉舊的備份
+del /f /q "{O_}"
+if exist "{R_}\\_internal_old" rmdir /s /q "{R_}\\_internal_old"
+if exist "{R_}\\{EXE}.old" del /f /q "{R_}\\{EXE}.old"
 exit /b 0
 :slow
-echo [%date% %time%] [換 EXE] 新的 EXE 還在跑但 3 分鐘沒回報，先留著舊的備份（_internal_old、{EXE}.old） >> "%LOGF%"
+call :L 新的 EXE 還在跑但 3 分鐘沒回報，先留著舊的備份（_internal_old、{EXE}.old）
 exit /b 0
 :restore
-echo [%date% %time%] [換 EXE] 失敗，換回舊的 >> "%LOGF%"
+call :L 換回舊的 EXE
 taskkill /F /IM {EXE} >nul 2>&1
 timeout /t 2 /nobreak >nul
-if exist "{q(root)}\\_internal_old" (if exist "{q(root)}\\_internal" rmdir /s /q "{q(root)}\\_internal")
-if exist "{q(root)}\\_internal_old" move "{q(root)}\\_internal_old" "{q(root)}\\_internal" >nul
-if exist "{q(root)}\\{EXE}.old" (if exist "{q(root)}\\{EXE}" del /f /q "{q(root)}\\{EXE}")
-if exist "{q(root)}\\{EXE}.old" move "{q(root)}\\{EXE}.old" "{q(root)}\\{EXE}" >nul
+if exist "{R_}\\_internal_old" (if exist "{R_}\\_internal" rmdir /s /q "{R_}\\_internal")
+if exist "{R_}\\_internal_old" move "{R_}\\_internal_old" "{R_}\\_internal" >nul
+if exist "{R_}\\{EXE}.old" (if exist "{R_}\\{EXE}" del /f /q "{R_}\\{EXE}")
+if exist "{R_}\\{EXE}.old" move "{R_}\\{EXE}.old" "{R_}\\{EXE}" >nul
 :fail
-echo [%date% %time%] [換 EXE] 沒有換成（解壓縮、搬檔或開啟失敗），用原本的 EXE 打開 >> "%LOGF%"
-if exist "{q(tmp)}" rmdir /s /q "{q(tmp)}"
+call :L 沒有換成，用原本的 EXE 打開
+if exist "{T_}" rmdir /s /q "{T_}"
 tasklist /FI "IMAGENAME eq {EXE}" /NH 2>nul | find /I "{EXE}" >nul && exit /b 1
-start "" /D "{q(root)}" "{q(root)}\\{EXE}"
+start "" /D "{R_}" "{R_}\\{EXE}"
 exit /b 1
+:L
+echo [%date% %time%] [換 EXE] %*
+echo [%date% %time%] [換 EXE] %* >> "%LOGF%"
+exit /b 0
 """
     bat.parent.mkdir(parents=True, exist_ok=True)
     logf.parent.mkdir(parents=True, exist_ok=True)
@@ -468,12 +502,25 @@ def swap_exe(shell_zip: str):
                        ensure_ascii=False), encoding="utf-8")
         log(f"換 EXE：程式先關掉（{len(busy)} 支轉檔中／排隊，開起來從中斷處接著轉）")
         if os.name == "nt":
-            subprocess.Popen(["cmd", "/c", str(bat)], creationflags=0x00000008 | 0x00000200 | 0x08000000, close_fds=True)
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 7                                # minimized, not focused: you can watch it in the taskbar
+            subprocess.Popen(["cmd", "/c", str(bat)], startupinfo=si, close_fds=True,
+                             creationflags=0x00000010 | 0x00000200)   # NEW_CONSOLE | NEW_PROCESS_GROUP (keeps running after we close)
         st["msg"] = "換 EXE 中：程式會關掉再自動打開（約 1～2 分鐘）"
+        log("換 EXE：BAT 已啟動，程式關掉中")
+
+        def _hard_exit():                                     # leftover threads must not keep the process (and the old EXE) alive
+            time.sleep(12)
+            log("換 EXE：程式 12 秒內沒有自己結束，強制結束")
+            os._exit(0)
+        threading.Thread(target=_hard_exit, daemon=True, name="FSSwapExit").start()
         from PySide6.QtWidgets import QApplication
         w = getattr(QApplication.instance(), "_fs_window", None)
         if w is not None:
             w.quit_app(force=True)
+        else:
+            QApplication.instance().quit()
     except Exception as ex:
         st["busy"] = False
         st["msg"] = f"換 EXE 準備失敗（程式沒關）：{ex}"
@@ -504,4 +551,12 @@ def after_start(win):
             except Exception:
                 pass
     QTimer.singleShot(15000, ok)
+    # an EXE package left in UPDATE by V2.19.0 would make an older launcher complain at every start: move it away
+    for d in (core.UPDATE_DIR, core.UPDATE_DIR / "failed"):
+        try:
+            for z in d.glob("FS_Shell_*.zip"):
+                os.replace(z, CLOUD_DIR() / z.name)
+                log(f"把 {z.name} 從 {d.name} 移到 Package\\cloud（EXE 壓縮檔不該放在 UPDATE）")
+        except OSError:
+            pass
     start_loop()

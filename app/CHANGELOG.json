@@ -1,6 +1,20 @@
 [
  {
   "date": "2026-11-17",
+  "title": "修正：換 EXE 沒有完成、開機跳「FS_Shell_L2.zip 無法套用」",
+  "version": "2.19.1",
+  "items": [
+   "修正：下載的新 EXE 壓縮檔以前放在 UPDATE，舊的 EXE 開機時把它當成程式更新包，跳出「無法套用（WinError 123）」；現在改放 Package\\cloud，已經在 UPDATE 的會自動移走",
+   "換 EXE 改成更穩：程式關掉後最多等 60 秒，還沒關就強制結束（不會在程式還開著時換檔）；解壓縮改用 Windows 內建的 tar（失敗再用 PowerShell）；每一步都寫進 LOG\\update_log.txt",
+   "換 EXE 時工作列會出現一個縮小的「FusionStitch 換 EXE」視窗，看得到它在做什麼，做完自己關掉",
+   "雲端同時有新程式和新 EXE 時：先熱更新程式（轉檔不中斷），再按一次「更新」才換 EXE，換 EXE 用的一定是最新的流程"
+  ],
+  "details": [
+   "程式關閉時若有背景程序拖住，12 秒後強制結束，避免舊 EXE 一直被占用"
+  ]
+ },
+ {
+  "date": "2026-11-17",
   "title": "☁ 雲端打包＋程式內自動更新（GitHub）",
   "version": "2.19.0",
   "items": [
