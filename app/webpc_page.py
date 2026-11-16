@@ -395,7 +395,7 @@ ${c.complete?`<div class="acts"><button class="pill" data-q="${esc(c.id)}">${o.l
 let CUT=null;
 async function cuMount(box){if(!box)return;clearInterval(CUT);
   const draw=async()=>{if(!box.isConnected){clearInterval(CUT);return;}let S;try{S=await J("/api/cloud");}catch(e){return;}
-    const c=S.chk||{};let h=`<h3>☁ 雲端更新</h3><div class="snote" style="margin:0 0 6px">目前 V${esc(S.cur)}（啟動器第 ${S.launcher} 版）。有新版只提示，按「更新」才下載（背景、限速）。</div>`;
+    const c=S.chk||{};let h=`<h3>☁ 雲端更新</h3><div class="snote" style="margin:0 0 6px">目前 V${esc(S.cur)}（啟動器第 ${S.launcher} 版）。有新版只提示，按「更新」才下載（背景、不限速）。</div>`;
     if(S.dl){const d=S.dl,p=d.size?d.got/d.size*100:0;h+=`<div>⬇ 下載 ${esc(d.label)}：<b>${p.toFixed(0)}%</b>（${fmtB(d.got)} / ${fmtB(d.size||0)}，${fmtB(d.spd||0)}/s）</div><i class="pb"><u style="width:${p.toFixed(1)}%"></u></i>`;}
     else if(S.msg)h+=`<div>${esc(S.msg)}</div>`;
     if(c.newer){h+=`<div style="margin-top:6px">🆕 <b>有新版 V${esc(S.ver)}</b>${S.date?`（${esc(S.date)}）`:""}　${c.need_shell?'<b style="color:#ffb347">⚠ 這次要換 EXE：程式會關掉再自動打開（約 1～2 分鐘），佇列從中斷處接著轉</b>':'熱更新，轉檔不中斷'}${c.skipped?" · 已略過這版":""}</div>`;

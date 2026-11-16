@@ -3289,7 +3289,7 @@ class UpdatePage(DropPage):
         if S.get("dl"):
             d = S["dl"]
             pct = d["got"] / d["size"] * 100 if d.get("size") else 0
-            h += f"<br>⬇ 下載 {d['label']}：{pct:.0f}%（{fmt_bytes(d['got'])} / {fmt_bytes(d.get('size') or 0)}，{fmt_bytes(d.get('spd') or 0)}/s，背景限速）"
+            h += f"<br>⬇ 下載 {d['label']}：{pct:.0f}%（{fmt_bytes(d['got'])} / {fmt_bytes(d.get('size') or 0)}，{fmt_bytes(d.get('spd') or 0)}/s）"
         elif S.get("msg"):
             h += "<br>" + S["msg"]
         if c.get("newer"):

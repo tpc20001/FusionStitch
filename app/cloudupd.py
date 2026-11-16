@@ -229,11 +229,12 @@ def start_loop():
 
 # ---------------------------------------------------------------- download
 def _download(url: str, dest: Path, sha: str, size: int, label: str) -> Path:
-    """Background, rate-limited (cloud_kbps, default 2 MB/s), .part first, SHA-256 checked, cancellable."""
+    """Background, full speed (cloud_kbps > 0 sets a limit in KB/s), .part first, SHA-256 checked, cancellable."""
     st = _st()
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(dest.name + ".part")
-    lim = max(64.0, float(core.cfg("cloud_kbps") or 2048)) * 1024
+    kb = float(core.cfg("cloud_kbps") or 0)
+    lim = max(64.0, kb) * 1024 if kb > 0 else 0.0          # 0 = no limit (default)
     h = hashlib.sha256()
     got, t0 = 0, time.time()
     st["dl"] = {"label": label, "got": 0, "size": int(size or 0), "t0": t0, "spd": 0.0}
@@ -250,10 +251,11 @@ def _download(url: str, dest: Path, sha: str, size: int, label: str) -> Path:
                     f.write(b)
                     h.update(b)
                     got += len(b)
-                    need = got / lim
-                    el = time.time() - t0
-                    if need > el:
-                        time.sleep(need - el)
+                    if lim:
+                        need = got / lim
+                        el = time.time() - t0
+                        if need > el:
+                            time.sleep(need - el)
                     st["dl"].update(got=got, spd=got / max(0.001, time.time() - t0))
         except InterruptedError:
             raise
@@ -354,7 +356,7 @@ def update(force: bool = False) -> dict:
         finally:
             st["dl"] = None
     threading.Thread(target=run, name="FSCloudDl", daemon=True).start()
-    return {"ok": True, "message": "開始下載（背景、限速），好了會自動更新" +
+    return {"ok": True, "message": "開始下載（背景），好了會自動更新" +
             ("；要換 EXE，程式會關掉再自動打開" if R["need_shell"] else "，轉檔不中斷")}
 
 

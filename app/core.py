@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 APP_NAME = "FusionStitch"
-APP_VERSION = "2.19.3"
+APP_VERSION = "2.19.4"
 LAUNCHER_API = 1          # bump when an update needs a newer launcher (FusionStitch.exe)
 
 APP_DIR = Path(__file__).resolve().parent
@@ -55,7 +55,7 @@ DEFAULTS = {
     "gpu_jobs": 1,                        # 同時用 GPU 轉檔的影片數
     "cache2_max_gb": 50,                  # 中繼 SSD 2（備援）最多先存多少素材
     "cloud_on": True,                     # ☁ 自動檢查雲端更新（只提示）
-    "cloud_kbps": 2048,                   # ☁ 下載更新的速度上限（KB/s），不搶頻寬
+    "cloud_kbps": 0,                      # ☁ 下載更新的速度上限（KB/s）；0＝不限速
     "pace_mode": "full",                  # 轉檔速度：full 全速 / manual 固定降速 / smart 智慧降速
     "pace_pct": 60,                       # 降速時的比例（%）
     "pace_idle_min": 3,                   # 智慧降速：幾分鐘沒碰鍵盤滑鼠就回到全速
