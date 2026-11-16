@@ -296,6 +296,12 @@ def update(force: bool = False) -> dict:
     if not R or not R.get("ok") or not R.get("newer"):
         return {"ok": False, "message": "沒有新版（先按「檢查更新」）"}
     info = R["info"]
+    # the check may be older than a hot update that happened since: decide again with the running version
+    R["newer_code"] = vkey(info["version"]) > vkey(core.APP_VERSION)
+    R["need_shell"] = bool(info.get("shell")) and int(info.get("launcher") or 1) > launcher()
+    R["newer"] = R["newer_code"] or R["need_shell"]
+    if not R["newer"]:
+        return {"ok": False, "message": f"已經是最新 V{core.APP_VERSION}"}
     if R["need_shell"]:
         if not getattr(sys, "frozen", False):
             return {"ok": False, "message": "這不是 EXE 執行的（原始碼模式），不能換 EXE"}
@@ -391,6 +397,11 @@ def cancel() -> dict:
 def status() -> dict:
     st = _st()
     c = st.get("chk") or {}
+    if c.get("ok") and c.get("info"):                     # re-judge against the running version (after a hot update)
+        I_ = c["info"]
+        c["newer_code"] = vkey(I_["version"]) > vkey(core.APP_VERSION)
+        c["need_shell"] = bool(I_.get("shell")) and int(I_.get("launcher") or 1) > launcher()
+        c["newer"] = c["newer_code"] or c["need_shell"]
     I = c.get("info") or {}
     dl = st.get("dl")
     return {"cur": core.APP_VERSION, "launcher": launcher(), "on": bool(core.cfg("cloud_on", True)),
@@ -525,15 +536,17 @@ def swap_exe(shell_zip: str, new_dir: str = ""):
                        ensure_ascii=False), encoding="utf-8")
         log(f"換 EXE：程式先關掉（{len(busy)} 支轉檔中／排隊，開起來從中斷處接著轉）")
         if new_dir and os.name == "nt":
-            subprocess.Popen([str(Path(new_dir) / EXE), "--fs-swap", "--root", str(core.ROOT), "--pid", str(os.getpid())],
-                             cwd=new_dir, close_fds=True, creationflags=0x00000008 | 0x00000200)   # DETACHED | NEW_GROUP
+            sp = subprocess.Popen([str(Path(new_dir) / EXE), "--fs-swap", "--root", str(core.ROOT), "--pid", str(os.getpid())],
+                                  cwd=new_dir, close_fds=True, creationflags=0x00000008 | 0x00000200)   # DETACHED | NEW_GROUP
+            st.setdefault("keep_pids", []).append(sp.pid)   # closing FusionStitch kills its child processes: not this one
             log("換 EXE：新的 EXE 會自己換上去（不用 BAT），程式關掉中")
         elif os.name == "nt":
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             si.wShowWindow = 7                                # minimized, not focused: you can watch it in the taskbar
-            subprocess.Popen(["cmd", "/c", str(bat)], startupinfo=si, close_fds=True,
-                             creationflags=0x00000010 | 0x00000200)   # NEW_CONSOLE | NEW_PROCESS_GROUP (keeps running after we close)
+            bp = subprocess.Popen(["cmd", "/c", str(bat)], startupinfo=si, close_fds=True,
+                                  creationflags=0x00000010 | 0x00000200)   # NEW_CONSOLE | NEW_PROCESS_GROUP (keeps running after we close)
+            st.setdefault("keep_pids", []).append(bp.pid)
         st["msg"] = "換 EXE 中：程式會關掉再自動打開（約 1～2 分鐘）"
         if not new_dir:
             log("換 EXE：BAT 已啟動，程式關掉中")
@@ -571,7 +584,9 @@ def after_start(win):
             except Exception:
                 d = {}
             p.unlink(missing_ok=True)
-            m = (f"換 EXE 完成：啟動器第 {launcher()} 版、V{core.APP_VERSION}"
+            done = launcher() > int(d.get("launcher") or 1)
+            m = ((f"換 EXE 完成：啟動器第 {d.get('launcher') or 1} 版 → 第 {launcher()} 版、V{core.APP_VERSION}" if done else
+                  f"換 EXE 沒有完成：還是啟動器第 {launcher()} 版（原因寫在 LOG\\update_log.txt 的「[換 EXE]」）")
                  + (f"；{len(d.get('busy') or [])} 支轉檔從中斷處接著轉" if d.get("busy") else ""))
             log(m)
             try:

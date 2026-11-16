@@ -3910,7 +3910,10 @@ class MainWindow(QMainWindow):
             q.save()
         try:
             import psutil
+            keep = set((getattr(QApplication.instance(), "_fs_cloud", None) or {}).get("keep_pids") or ())
             for ch in psutil.Process().children(recursive=True):
+                if ch.pid in keep:                  # the EXE swapper must outlive us
+                    continue
                 ch.kill()
         except Exception:
             pass
