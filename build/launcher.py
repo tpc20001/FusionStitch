@@ -19,7 +19,7 @@ from pathlib import Path
 
 # 程式會用到的模組列在 build/_deps.py，打包時用 --hidden-import _deps 包進 EXE（執行時不先全部載入）
 
-LAUNCHER_VERSION = 2          # V2.19.0 雲端自動更新：設環境變數 FS_LAUNCHER，程式才知道 EXE 要不要換
+LAUNCHER_VERSION = 3          # 2：V2.19.0 雲端自動更新（設 FS_LAUNCHER）；3：V2.19.2 新 EXE 自己換上去（--fs-swap，不用 BAT）
 EXE_NAME = "FusionStitch.exe"
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
 APP_DIR = ROOT / "app"
@@ -197,9 +197,158 @@ def selftest():
     return 0 if not bad else 2
 
 
+# ---------------------------------------------------------------- 換 EXE（新的 EXE 自己換上去）
+def _arg(name, default=""):
+    return sys.argv[sys.argv.index(name) + 1] if name in sys.argv and sys.argv.index(name) + 1 < len(sys.argv) else default
+
+
+def _alive(pid):
+    if os.name != "nt":
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+    import ctypes
+    h = ctypes.windll.kernel32.OpenProcess(0x1000 | 0x00100000, False, int(pid))      # QUERY_LIMITED | SYNCHRONIZE
+    if not h:
+        return False
+    try:
+        return ctypes.windll.kernel32.WaitForSingleObject(h, 0) == 0x102                # WAIT_TIMEOUT = still running
+    finally:
+        ctypes.windll.kernel32.CloseHandle(h)
+
+
+def _retry(fn, what, secs=30):
+    t0 = time.time()
+    while True:
+        try:
+            return fn()
+        except OSError as e:
+            if time.time() - t0 > secs:
+                raise OSError(f"{what}：{e}")
+            time.sleep(1)
+
+
+def swap(new_dir, root, pid):
+    """FusionStitch.exe --fs-swap --root <安裝資料夾> --pid <舊程式>（從 Package\\cloud\\shell_new 執行）:
+    等舊程式關掉 → 舊 EXE、_internal 改名 → 複製新的 → 打開新 EXE、等它回報開成功（UPDATE\\shell_ok.flag）
+    → 成功刪舊的；失敗換回舊的照常打開。每一步寫進 <root>\\LOG\\update_log.txt."""
+    root, new_dir = Path(root), Path(new_dir)
+    logf = root / "LOG" / "update_log.txt"
+
+    def L(m):
+        try:
+            logf.parent.mkdir(parents=True, exist_ok=True)
+            with logf.open("a", encoding="utf-8") as f:
+                f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [換 EXE L{LAUNCHER_VERSION}] {m}\n")
+        except Exception:
+            pass
+    exe, internal = root / EXE_NAME, root / "_internal"
+    old_exe, old_int = root / (EXE_NAME + ".old"), root / "_internal_old"
+    okf = root / "UPDATE" / "shell_ok.flag"
+    import subprocess
+
+    def start(path):
+        return subprocess.Popen([str(path)], cwd=str(root), close_fds=True,
+                                creationflags=(0x00000008 | 0x00000200) if os.name == "nt" else 0)
+
+    def restore(why, proc=None):
+        L(f"換回舊的 EXE（{why}）")
+        if proc is not None and proc.poll() is None:      # only the new program (not by name: this swapper is a FusionStitch.exe too)
+            try:
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, timeout=20)
+            except Exception:
+                proc.kill()
+        time.sleep(2)
+        try:
+            if old_int.exists():
+                if internal.exists():
+                    _retry(lambda: shutil.rmtree(internal), "刪新的 _internal")
+                _retry(lambda: os.replace(old_int, internal), "_internal_old 改回 _internal")
+            if old_exe.exists():
+                if exe.exists():
+                    _retry(lambda: exe.unlink(), "刪新的 EXE")
+                _retry(lambda: os.replace(old_exe, exe), f"{EXE_NAME}.old 改回")
+            L("已經換回舊的，照常打開")
+        except Exception as e:
+            L(f"換回舊的時出錯：{e}（請看 {root}，_internal_old、{EXE_NAME}.old 是舊的）")
+        try:
+            start(exe)
+        except Exception as e:
+            L(f"打不開 EXE：{e}")
+        note(f"這次沒有換成新的 EXE（{why}），已經用原本的打開。\n詳細記錄在 LOG\\update_log.txt。", secs=30)
+        return 1
+
+    L(f"開始：新 EXE 在 {new_dir}，安裝資料夾 {root}，等舊程式（PID {pid}）關掉")
+    t0 = time.time()
+    while pid and _alive(pid) and time.time() - t0 < 60:
+        time.sleep(0.5)
+    if pid and _alive(pid):
+        L("等了 60 秒還沒關，強制結束")
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, timeout=20)
+        except Exception:
+            pass
+        time.sleep(5)
+        if _alive(pid):
+            L("舊程式關不掉，這次不換 EXE")
+            note("舊的 FusionStitch 關不掉，這次沒有換 EXE。", error=True, secs=30)
+            return 1
+    L(f"舊程式已經關了（{time.time() - t0:.0f} 秒）")
+    time.sleep(2)
+    if not (new_dir / EXE_NAME).exists() or not (new_dir / "_internal").is_dir():
+        L("新的 EXE 不完整（找不到 EXE 或 _internal），不換")
+        return restore("新的 EXE 不完整")
+    try:
+        if old_int.exists():
+            _retry(lambda: shutil.rmtree(old_int), "刪上次留下的 _internal_old")
+        if old_exe.exists():
+            _retry(lambda: old_exe.unlink(), f"刪上次留下的 {EXE_NAME}.old")
+        if internal.exists():
+            _retry(lambda: os.replace(internal, old_int), "舊的 _internal 改名（可能有檔案被占用）")
+        _retry(lambda: os.replace(exe, old_exe), f"舊的 {EXE_NAME} 改名")
+        L("舊的已改名備份（_internal_old、.old），複製新的檔案")
+        shutil.copytree(new_dir / "_internal", internal)
+        shutil.copy2(new_dir / EXE_NAME, exe)
+    except Exception as e:
+        L(f"換檔失敗：{e}")
+        return restore(str(e))
+    L("檔案換好了，打開新的 EXE、等它回報開成功（最多 3 分鐘）")
+    try:
+        okf.unlink()
+    except OSError:
+        pass
+    try:
+        p = start(exe)
+    except Exception as e:
+        return restore(f"新的 EXE 打不開：{e}")
+    t1 = time.time()
+    while time.time() - t1 < 180:
+        time.sleep(2)
+        if okf.exists():
+            L(f"成功：新的 EXE 開起來了（{time.time() - t1:.0f} 秒），刪掉舊的備份")
+            try:
+                okf.unlink()
+            except OSError:
+                pass
+            shutil.rmtree(old_int, ignore_errors=True)
+            try:
+                old_exe.unlink()
+            except OSError:
+                pass
+            return 0
+        if p.poll() is not None:
+            return restore(f"新的 EXE 自己關掉了（結束代碼 {p.returncode}）", p)
+    L("新的 EXE 還在跑但 3 分鐘沒回報，先留著舊的備份（_internal_old、.old）")
+    return 0
+
+
 def main():
     if "--launcher-selftest" in sys.argv:
         return selftest()
+    if "--fs-swap" in sys.argv:
+        return swap(Path(sys.executable).resolve().parent, _arg("--root"), int(_arg("--pid", "0") or 0))
     os.chdir(ROOT)
     log(f"啟動 {sys.executable}")
     backup, applied = apply_updates()

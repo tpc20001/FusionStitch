@@ -326,9 +326,14 @@ def update(force: bool = False) -> dict:
                 # NOT into UPDATE: an older launcher would treat every zip there as a program update
                 sz = _download(info["shell"], CLOUD_DIR() / f"FS_Shell_L{info.get('launcher')}.zip", info.get("shell_sha256"),
                                info.get("shell_size"), f"EXE 第 {info.get('launcher')} 版")
-                st["msg"] = "下載好了，準備換 EXE（程式會關掉再自動打開）"
                 log(f"EXE 第 {info.get('launcher')} 版下載好了（SHA-256 對過），準備換 EXE")
-                _ui(lambda p=str(sz): swap_exe(p))
+                nd = None
+                if int(info.get("launcher") or 1) >= 3:          # the new EXE can swap itself in (no BAT)
+                    st["msg"] = "解壓縮新的 EXE…"
+                    nd = _extract(sz)
+                    log(f"新的 EXE 解壓縮好了：{nd}")
+                st["msg"] = "準備換 EXE（程式會關掉再自動打開）"
+                _ui(lambda p=str(sz), d=(str(nd) if nd else ""): swap_exe(p, d))
             else:
                 zp = _download(info["zip"], CLOUD_DIR() / f"FS_V{info['version']}_Update.zip",
                                info.get("zip_sha256"), info.get("zip_size"), f"程式 V{info['version']}")
@@ -491,24 +496,47 @@ exit /b 0
     return bat
 
 
-def swap_exe(shell_zip: str):
-    """Qt thread: write the BAT, note what was running, start the BAT, close FusionStitch (no questions)."""
+def _extract(shell_zip) -> Path:
+    """Unpack the EXE package into Package\\cloud\\shell_new (background thread, before anything closes)."""
+    import shutil
+    import zipfile
+    nd = CLOUD_DIR() / "shell_new"
+    shutil.rmtree(nd, ignore_errors=True)
+    nd.mkdir(parents=True)
+    with zipfile.ZipFile(shell_zip) as zf:
+        for m in zf.namelist():
+            if ".." in Path(m).parts or Path(m).is_absolute():
+                raise OSError(f"EXE 壓縮檔裡有不安全的路徑：{m}")
+        zf.extractall(nd)
+    if not (nd / EXE).exists() or not (nd / "_internal").is_dir():
+        raise OSError("EXE 壓縮檔不完整（找不到 FusionStitch.exe 或 _internal）")
+    return nd
+
+
+def swap_exe(shell_zip: str, new_dir: str = ""):
+    """Qt thread: start the swapper (the new EXE itself, or a BAT for older EXE packages), note what was
+    running, close FusionStitch (no questions)."""
     st = _st()
     try:
-        bat = _bat(shell_zip, os.getpid())
+        bat = None if new_dir else _bat(shell_zip, os.getpid())
         busy = busy_jobs()
         (core.PACKAGE_DIR / "resume_after_update.json").write_text(
             json.dumps({"t": time.time(), "busy": busy, "from": core.APP_VERSION, "launcher": launcher(), "why": "cloud_shell"},
                        ensure_ascii=False), encoding="utf-8")
         log(f"換 EXE：程式先關掉（{len(busy)} 支轉檔中／排隊，開起來從中斷處接著轉）")
-        if os.name == "nt":
+        if new_dir and os.name == "nt":
+            subprocess.Popen([str(Path(new_dir) / EXE), "--fs-swap", "--root", str(core.ROOT), "--pid", str(os.getpid())],
+                             cwd=new_dir, close_fds=True, creationflags=0x00000008 | 0x00000200)   # DETACHED | NEW_GROUP
+            log("換 EXE：新的 EXE 會自己換上去（不用 BAT），程式關掉中")
+        elif os.name == "nt":
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             si.wShowWindow = 7                                # minimized, not focused: you can watch it in the taskbar
             subprocess.Popen(["cmd", "/c", str(bat)], startupinfo=si, close_fds=True,
                              creationflags=0x00000010 | 0x00000200)   # NEW_CONSOLE | NEW_PROCESS_GROUP (keeps running after we close)
         st["msg"] = "換 EXE 中：程式會關掉再自動打開（約 1～2 分鐘）"
-        log("換 EXE：BAT 已啟動，程式關掉中")
+        if not new_dir:
+            log("換 EXE：BAT 已啟動，程式關掉中")
 
         def _hard_exit():                                     # leftover threads must not keep the process (and the old EXE) alive
             time.sleep(12)
@@ -551,6 +579,10 @@ def after_start(win):
             except Exception:
                 pass
     QTimer.singleShot(15000, ok)
+    def _clean_new():
+        import shutil
+        shutil.rmtree(CLOUD_DIR() / "shell_new", ignore_errors=True)   # (a swapper is long finished after 4 minutes)
+    QTimer.singleShot(240000, _clean_new)
     # an EXE package left in UPDATE by V2.19.0 would make an older launcher complain at every start: move it away
     for d in (core.UPDATE_DIR, core.UPDATE_DIR / "failed"):
         try:
