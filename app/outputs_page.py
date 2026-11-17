@@ -95,6 +95,8 @@ class OutputsPage(QWidget):
         b.clicked.connect(self.add_folder); top.addWidget(b)
         self.b_rm = QPushButton("從清單移除"); self.b_rm.setToolTip("只是不在這裡顯示，電腦上的資料夾和影片都不會刪除")
         self.b_rm.clicked.connect(self.remove_folder); top.addWidget(self.b_rm)
+        b = QPushButton("🎨 補上色彩標記"); b.clicked.connect(self.color_tag); top.addWidget(b)
+        b.setToolTip("過渡用：V2.19.5 以前轉的影片沒有色彩標記，YouTube 可能偏色。\n找出這些影片、原地補上標記（不重新轉檔、畫質不變、360 資訊保留）")
         b = QPushButton("開啟成品資料夾"); b.clicked.connect(self.open_folder); top.addWidget(b)
         b = QPushButton("重新整理"); b.clicked.connect(self.refresh); top.addWidget(b)
         l.addLayout(top)
@@ -162,6 +164,65 @@ class OutputsPage(QWidget):
         outfolders.remove(sel)
         self.fsel.setCurrentIndex(0)
         self.refresh()
+
+    def color_tag(self):
+        """過渡用 🎨: find outputs without colour tags in the folder(s) shown and tag them in place."""
+        import colortag
+        import outfolders
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QProgressBar
+        sel = self.fsel.currentData()
+        folders = [Path(sel)] if sel else outfolders.all_()
+        dlg = QDialog(self); dlg.setWindowTitle("🎨 補上色彩標記"); dlg.resize(640, 480)
+        v = QVBoxLayout(dlg)
+        head = QLabel("正在找沒有色彩標記的影片…"); head.setWordWrap(True); v.addWidget(head)
+        lst = QListWidget(); v.addWidget(lst, 1)
+        bar = QProgressBar(); bar.setVisible(False); v.addWidget(bar)
+        note = QLabel("不重新轉檔：畫面和聲音一個位元都不變，只寫入 BT.709 色彩標記，360／空間音訊資訊保留，檔案日期不變。\n"
+                      "先寫到暫存檔、檢查長度和大小沒問題才取代原檔；正在播放的檔案會略過。")
+        note.setObjectName("sub"); note.setWordWrap(True); v.addWidget(note)
+        bb = QDialogButtonBox(); go = bb.addButton("補上勾選的", QDialogButtonBox.AcceptRole)
+        close = bb.addButton("關閉", QDialogButtonBox.RejectRole); v.addWidget(bb)
+        go.setEnabled(False); close.clicked.connect(dlg.reject)
+        found: list[str] = []
+        box = {}
+
+        def scan():
+            box["r"] = colortag.scan(folders)
+        th = threading.Thread(target=scan, daemon=True); th.start()
+
+        def poll():
+            if "r" in box and not found and lst.count() == 0 and not box.get("shown"):
+                box["shown"] = True
+                found.extend(box["r"])
+                for p in found:
+                    it = QListWidgetItem(p); it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
+                    it.setCheckState(Qt.Checked); lst.addItem(it)
+                head.setText(f"找到 {len(found)} 支沒有色彩標記的影片（預設全勾）。" if found
+                             else "都已經有色彩標記了，不用補 👍")
+                go.setEnabled(bool(found))
+            st = colortag.status()
+            if box.get("run"):
+                bar.setVisible(True); bar.setMaximum(max(1, st["total"])); bar.setValue(st["done"])
+                if st["busy"]:
+                    head.setText(f"補標記中 {st['done']}/{st['total']}：{st['cur']}")
+                else:
+                    msg = f"完成：成功 {len(st['ok'])} 支" + (f"，失敗 {len(st['fail'])} 支" if st["fail"] else "")
+                    head.setText(msg); box["run"] = False
+                    if st["fail"]:
+                        lst.clear(); [lst.addItem("✗ " + x) for x in st["fail"]]
+                    else:
+                        lst.clear(); lst.addItem("✓ 全部補好了，重新上傳 YouTube 的話顏色就會正確")
+                    self.refresh()
+        tm = QTimer(dlg); tm.timeout.connect(poll); tm.start(400)
+
+        def run():
+            paths = [lst.item(i).text() for i in range(lst.count()) if lst.item(i).checkState() == Qt.Checked]
+            r = colortag.start(paths)
+            head.setText(r.get("message", ""))
+            if r.get("ok"):
+                box["run"] = True; go.setEnabled(False)
+        go.clicked.connect(run)
+        dlg.exec()
 
     def files(self) -> list[Path]:
         import outfolders

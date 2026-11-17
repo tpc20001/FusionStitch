@@ -666,7 +666,7 @@ async function viewOuts(){$("#clk").textContent="";const host=V();if(OUTSEL===nu
   if(OUTSEL==="")lsSet("fs_outs_seen",String(d.items.length?d.items[0].mtime:0));if($("#no"))$("#no").hidden=true;
   const fname=i=>{const f=d.folders.find(x=>x.i===i);return f?f.name:"";};
   const all=d.folders.reduce((a,f)=>a+f.count,0);
-  const chips=`<div class="ofc"><button class="ofb${OUTSEL===""?" on":""}" data-od="">全部 <b>${all}</b></button>${d.folders.map(f=>`<span class="ofb${OUTSEL===String(f.i)?" on":""}${f.exists?"":" miss"}"><button data-od="${f.i}" title="${esc(f.path)}">${f.current?"📦":"🗂"} ${esc(f.name)} <b>${f.count}</b>${f.exists?"":" ⚠"}</button>${f.removable?`<button class="ofx" data-orm="${esc(f.path)}" title="從清單移除（不會刪除電腦上的資料夾和檔案）">✕</button>`:""}</span>`).join("")}<button class="ofb ofadd" id="oAdd">＋ 加入資料夾</button></div>`;
+  const chips=`<div class="ofc"><button class="ofb${OUTSEL===""?" on":""}" data-od="">全部 <b>${all}</b></button>${d.folders.map(f=>`<span class="ofb${OUTSEL===String(f.i)?" on":""}${f.exists?"":" miss"}"><button data-od="${f.i}" title="${esc(f.path)}">${f.current?"📦":"🗂"} ${esc(f.name)} <b>${f.count}</b>${f.exists?"":" ⚠"}</button>${f.removable?`<button class="ofx" data-orm="${esc(f.path)}" title="從清單移除（不會刪除電腦上的資料夾和檔案）">✕</button>`:""}</span>`).join("")}<button class="ofb ofadd" id="oAdd">＋ 加入資料夾</button><button class="ofb" id="oTag" title="過渡用：V2.19.5 以前的影片補上色彩標記（不重新轉檔）">🎨 補色彩標記</button></div>`;
   const sh=OUTSEL===""?`${d.folders.length} 個資料夾`:esc(d.folder);
   host.innerHTML=`<style>.ofc{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px}.ofb{display:inline-flex;align-items:center;background:var(--btn);border:1px solid var(--line2);border-radius:999px;color:var(--text);font:inherit;font-size:13px;overflow:hidden}
 .ofb>button,button.ofb{background:none;border:0;color:inherit;font:inherit;padding:6px 11px}.ofb b{color:var(--sub);font-weight:700;margin-left:3px}.ofb.on{background:#16324a;border-color:#2b8ad8;color:#fff}.ofb.on b{color:#9fd3ff}
@@ -678,11 +678,27 @@ async function viewOuts(){$("#clk").textContent="";const host=V();if(OUTSEL===nu
   host.onclick=async e=>{const b=e.target.closest("button");if(!b)return;
     if(b.dataset.od!==undefined){OUTSEL=b.dataset.od;lsSet("fs_outdir",OUTSEL);viewOuts();return;}
     if(b.dataset.orm){if(confirm("把這個資料夾從成品清單移除？\n\n只是不在這裡顯示，電腦上的資料夾和裡面的影片都不會刪除。\n\n"+b.dataset.orm)){await act("/api/outfolders/remove",{path:b.dataset.orm});OUTSEL="";lsSet("fs_outdir","");viewOuts();}return;}
+    if(b.id==="oTag"){colorTag(OUTSEL===""?"":(d.folders.find(f=>String(f.i)===OUTSEL)||{}).path||"");return;}
+    if(b.id==="ctGo"){const ps=[...document.querySelectorAll("#player input[data-ct]:checked")].map(x=>x.dataset.ct);if(!ps.length)return toast("沒有勾選");const j=await act("/api/colortag/run",{paths:ps});if(j.ok)ctWatch();return;}
+    if(b.id==="ctX"){$("#player").innerHTML="";return;}
     if(b.id==="oAdd"){pickDir("加入成品資料夾（只是加入清單來瀏覽）","",async p=>{const j=await act("/api/outfolders/add",{path:p});if(j&&j.ok!==false)viewOuts();});return;}
     if(b.dataset.play)play(b.dataset.play);
     else if(b.dataset.rq){if(confirm("用同一段素材、同一個預設重新轉檔？"))await act("/api/outputs/requeue",{name:b.dataset.rq});}
     else if(b.dataset.del){if(confirm("刪除這個成品檔案？（原始素材不受影響）\n\n"+b.dataset.fn)){await act("/api/outputs/delete",{name:b.dataset.del});viewOuts();}}};
   if(S.play){const n=S.play;S.play=null;const it=d.items.find(o=>o.name===n||(o.file===n&&d.folders[o.dir]&&d.folders[o.dir].current));if(it)play(it.name);else toast("成品還在搬運，或不在成品資料夾");}}
+async function colorTag(dir){const p=$("#player");if(!p)return;
+  p.innerHTML='<div class="panel"><b>🎨 補上色彩標記</b><div class="snote">正在找沒有色彩標記的影片…</div></div>';
+  await post("/api/colortag/scan",{dir});let d;
+  for(let i=0;i<600;i++){await new Promise(r=>setTimeout(r,700));try{d=await J("/api/colortag");}catch(e){continue;}if(!d.scanning&&d.found)break;}
+  if(!d||!d.found){p.innerHTML="";return toast("✖ 找不到結果");}
+  const L=d.found;const nm=x=>x.split(/[\\/]/).pop();
+  p.innerHTML=`<div class="panel"><div class="r1"><b>🎨 補上色彩標記</b><button class="pill" id="ctX" style="flex:none;margin-left:auto">✕</button></div>`+
+   (L.length?`<div class="snote">找到 ${L.length} 支沒有色彩標記的影片（預設全勾）。不重新轉檔、畫質不變、360 資訊保留，一支幾秒；正在播放的檔案會略過。</div>
+<div style="max-height:40vh;overflow:auto;margin:6px 0">${L.map(x=>`<label style="display:flex;gap:8px;padding:5px 2px;font-size:13px;word-break:break-all"><input type="checkbox" checked data-ct="${esc(x)}">${esc(nm(x))}</label>`).join("")}</div>
+<button class="pill" id="ctGo" style="width:100%">補上勾選的 ${L.length} 支</button><div class="snote" id="ctSt"></div>`:`<div class="snote">都已經有色彩標記了，不用補 👍</div>`)+`</div>`;}
+async function ctWatch(){for(;;){await new Promise(r=>setTimeout(r,1000));let d;try{d=await J("/api/colortag");}catch(e){continue;}const el=$("#ctSt");if(!el)return;
+  if(d.busy){el.textContent=`補標記中 ${d.done}/${d.total}：${d.cur}`;continue;}
+  el.innerHTML=`✔ 完成：成功 ${d.ok.length} 支`+(d.fail.length?`，失敗 ${d.fail.length} 支<br>`+d.fail.map(esc).join("<br>"):"（重新上傳 YouTube 顏色就會正確）");const g=$("#ctGo");if(g)g.hidden=true;return;}}
 /* ================= 工具 ================= */
 const TOOLS=[["轉檔",[["bg","🖥","後台狀態","現在在轉什麼、排隊什麼、中繼 SSD，可以取消"],["queue","☰","轉檔佇列","暫停、繼續、置頂、重試、全部轉完後關機"],["outs","▸","成品","播放、下載、重新轉檔"]]],
  ["顏色",[["cm","🎨","原廠色彩對標","用一支原廠轉好的影片，學 GoPro Fusion Studio 的顏色"]]],
