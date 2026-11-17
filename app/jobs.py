@@ -329,6 +329,11 @@ class Finisher:
         return np.clip(out[..., ::-1] * 255 + 0.5, 0, 255).astype(np.uint8)
 
 
+# The GPU writes BT.709 limited-range YUV: say so in the file, so YouTube, browsers and players do not
+# have to guess (an untagged file can be read as BT.601 → reds turn orange, greens yellowish).
+COLOR_TAGS = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]
+
+
 def nv12_to_planes(buf, w, h):
     a = np.frombuffer(buf, np.uint8)
     uv = a[w * h:w * h * 3 // 2].reshape(h // 2, w // 2, 2)
@@ -1501,7 +1506,7 @@ def run_video(job: Job):
                     tmp = parts / f"part_{k:05d}.tmp.mkv"
                     cmd = [ff.FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-nostdin",
                            "-f", "rawvideo", "-pix_fmt", in_fmt, "-s", f"{ow}x{oh}", "-r", out_rate_str, "-i", "-",
-                           *venc, "-bsf:v", bsf, "-an", str(tmp)]
+                           *venc, *COLOR_TAGS, "-bsf:v", bsf, "-an", str(tmp)]
                     enc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE,
                                            creationflags=ff.NO_WINDOW)
                     err_buf: list[bytes] = []
