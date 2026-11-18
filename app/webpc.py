@@ -344,7 +344,12 @@ def queue_state() -> dict:
         pst.pop("idle", None)
     except Exception:
         pst = None
-    return {"pace": pst, "relay_use": ru, "batches": bs["batches"], "drives": bs["drives"], "jobs": jobs_, "after": core.cfg("after_queue") or "none", "relay": relay,
+    try:
+        import hsbridge
+        hst = hsbridge.status()
+    except Exception:
+        hst = None
+    return {"pace": pst, "hs": hst, "relay_use": ru, "batches": bs["batches"], "drives": bs["drives"], "jobs": jobs_, "after": core.cfg("after_queue") or "none", "relay": relay,
             "cache_dir": core.cfg("cache_dir") or "", "cache_dir2": core.cfg("cache_dir2") or "",
             "dest": core.cfg("out_folder") if core.cfg("out_folder_mode") == "custom" else ""}
 
@@ -1060,6 +1065,9 @@ def handle(method: str, path: str, query: dict, body: dict, remote) -> tuple:
                 core.set_cfg("cloud_on", bool(body.get("on")))
                 return J({"ok": True, "message": "自動檢查更新：" + ("開" if body.get("on") else "關")})
             return J({"ok": False, "message": "不認得的動作"})
+        if path == "/api/hs":
+            import hsbridge
+            return J(hsbridge.act(body))
         if path == "/api/pace":
             if body.get("mode") in ("full", "manual", "smart"):
                 core.set_cfg("pace_mode", body["mode"])

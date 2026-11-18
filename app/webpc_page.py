@@ -414,6 +414,25 @@ async function cuMount(box){if(!box)return;clearInterval(CUT);
 let BSEL=new Set();
 document.addEventListener("input",e=>{if(e.target&&e.target.id==="pcR"){const v=document.getElementById("pcV");if(v)v.textContent=e.target.value+"%";}});
 document.addEventListener("change",async e=>{if(e.target&&e.target.id==="pcR"){await act("/api/pace",{pct:+e.target.value});viewQueue();}});
+document.addEventListener("change",async e=>{const t=e.target;if(!t||!t.dataset)return;
+  if(t.id==="hsR"){const v=+t.value*10;await act("/api/hs",{share:v});viewQueue();}
+  else if(t.id==="hsRes"){await act("/api/hs",{reserve:+t.value});viewQueue();}
+  else if(t.id==="hsOn"){await act("/api/hs",{on:t.checked});viewQueue();}
+  else if(t.id==="hsResOn"){await act("/api/hs",{reserve_on:t.checked});viewQueue();}
+  else if(t.id==="hsPr"){await act("/api/hs",{prio:+t.value});viewQueue();}});
+document.addEventListener("input",e=>{const t=e.target;if(t&&t.id==="hsR"){const o=document.getElementById("hsV");if(o)o.textContent=`FusionStitch ${t.value*10} : ${100-t.value*10} ${o.dataset.o}`;}
+  if(t&&t.id==="hsRes"){const o=document.getElementById("hsRV");if(o)o.textContent=t.value+"%";}});
+document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.closest("[data-hsb]");if(!b)return;await act("/api/hs",{boost:+b.dataset.hsb});viewQueue();});
+function hsH(h){if(!h)return "";const M={alone:"照常跑",lead:"這邊先跑",yield:"讓對方先",split:"照分配"};const P=h.peers||[];const o=h.other||"SortCut";
+  const who=P.length?P.map(p=>`${esc(p.name)} V${esc(p.ver)}（${esc(p.what||"閒著")}）`).join("、"):"沒看到 "+esc(o);
+  const left=h.boost_until-Date.now()/1000;const sh=Math.round((h.share||50)/10);
+  return `<div class="pcbox"><div class="pchd"><b>🤝 跟 ${esc(o)} 握手</b><label style="display:flex;gap:6px;align-items:center;margin-left:auto"><input type="checkbox" id="hsOn" ${h.on?"checked":""}>開</label></div>
+${h.on?`<div class="snote" style="margin:2px 0 6px;${h.mode==="yield"||h.mode==="split"?"color:#ffb347":""}">${who}<br>${M[h.mode]||h.mode}：${esc(h.why||"")} · 規則第 ${h.rules} 版${h.rules_from==="lib"?"（對方的新版）":""}</div>
+<div class="pcs"><span>分配</span><input type="range" id="hsR" min="1" max="9" step="1" value="${sh}"><b id="hsV" data-o="${esc(o)}" style="white-space:nowrap">FusionStitch ${sh*10} : ${100-sh*10} ${esc(o)}</b></div>
+<div class="pcs"><label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="hsResOn" ${h.reserve_on?"checked":""}>我在用電腦時留</label><input type="range" id="hsRes" min="0" max="80" step="10" value="${h.reserve}"><b id="hsRV">${h.reserve}%</b></div>
+<div class="pcs"><span>優先</span><select id="hsPr">${[0,1,2,3,4,5,6,7,8,9,10].map(v=>`<option${v===h.prio?" selected":""}>${v}</option>`).join("")}</select>
+${left>0?`<button class="pill" data-hsb="0">取消先跑（剩 ${Math.ceil(left/60)} 分）</button>`:`<button class="pill" data-hsb="1">⏩ 這邊先跑 1 小時</button>`}</div>
+<div class="snote" style="margin:4px 0 0">兩邊都在轉檔時照分配；有人在用電腦（${h.idle_min} 分鐘內動過鍵盤滑鼠）時兩邊合起來只用 ${100-h.reserve}%。分配兩邊共用，哪邊拉都一樣。</div>`:`<div class="snote">關著：兩邊各跑各的</div>`}</div>`;}
 function paceH(p){const M=[["full","🚀 全速"],["smart","🧠 智慧降速"],["manual","🐢 固定降速"]];
   return `<div class="pcbox"><div class="pchd"><b>⚡ 轉檔速度</b><span class="pcnow ${p.level<0.999?"slow":""}">${esc(p.label)}</span></div>
 <div class="pcm">${M.map(([k,t])=>`<button class="pill${p.mode===k?" on":""}" data-pmode="${k}">${t}</button>`).join("")}</div>
@@ -455,7 +474,7 @@ async function viewQueue(){const host=V();if(!S.q)host.innerHTML='<div class="em
 <div class="tools" style="margin-top:6px"><span class="snote" style="margin:0;flex:none">全部轉完後</span><div class="seg" id="qafter">${A.map(([k,t])=>`<button data-k="${k}"${k===d.after?' class="on"':""}>${t}</button>`).join("")}</div></div>
 <div class="snote">${run?`▶ #${run.id} ${esc(run.title)} ${(run.progress*100).toFixed(1)}% · ${run.fps.toFixed(1)} fps · 剩 ${fd(run.eta)}`:"閒置"} · 排隊 ${d.jobs.filter(j=>j.status==="queued").length}</div></div>
 <div class="panel">
-${d.pace?paceH(d.pace):""}<div class="r2"><span>💽 中繼 SSD</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir||"不使用")}</b><button class="pill" id="pc" style="flex:none">選擇…</button>${d.cache_dir?'<button class="pill" id="pcx" style="flex:none">不使用</button>':""}</div>
+${d.pace?paceH(d.pace):""}${hsH(d.hs)}<div class="r2"><span>💽 中繼 SSD</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir||"不使用")}</b><button class="pill" id="pc" style="flex:none">選擇…</button>${d.cache_dir?'<button class="pill" id="pcx" style="flex:none">不使用</button>':""}</div>
 ${d.cache_dir?`<div class="r2" style="margin-top:6px"><span>💽 中繼 2（備援）</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir2||"不使用")}</b><button class="pill" id="pc2" style="flex:none">選擇…</button>${d.cache_dir2?'<button class="pill" id="pc2x" style="flex:none">不使用</button>':""}</div>`:""}
 <div class="r2" style="margin-top:6px"><span>📦 成品送到</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.dest||"素材資料夾裡的 stitched")}</b><button class="pill" id="pd" style="flex:none">選擇…</button>${d.dest?'<button class="pill" id="pdx" style="flex:none">回預設</button>':""}</div>
 ${d.relay_use?`<div class="snote">📥 中繼已先存素材：${(d.relay_use.roots||[{drive:"",used:d.relay_use.used,cap:d.relay_use.cap,main:true}]).map(x=>`${esc(x.drive)}${x.main?"（主要）":"（備援）"} ${fmtB(x.used)}${x.cap?" / "+fmtB(x.cap):""}`).join("　")}（正在轉的和下一支一定先存，其他滿了就等）</div>`:""}${d.relay?`<div class="snote">${esc(d.relay)}</div>`:""}</div>`;

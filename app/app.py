@@ -2480,6 +2480,33 @@ class QueuePage(QWidget):
         self.pace_now = QLabel(""); self.pace_now.setObjectName("sub"); pr.addWidget(self.pace_now)
         pr.addStretch(1)
         l.addLayout(pr)
+        # 🤝 跟 SortCut 握手（分配拉桿兩邊共用）
+        hr = QHBoxLayout()
+        self.hs_on = QCheckBox("🤝 跟 SortCut 握手"); self.hs_on.setChecked(cfg("hs_on") is not False)
+        self.hs_on.setToolTip("同一台電腦上的 SortCut 也在轉檔時，兩邊照下面的比例分電腦的效能；對方閒著時這邊全速")
+        self.hs_on.toggled.connect(lambda v: self._hs_act(on=bool(v))); hr.addWidget(self.hs_on)
+        hr.addWidget(QLabel("分配"))
+        self.hs_share = QSlider(Qt.Horizontal); self.hs_share.setRange(1, 9); self.hs_share.setFixedWidth(160)
+        self.hs_share.setToolTip("兩邊都在轉檔時：FusionStitch 拿幾成（拉到 4 ＝ 40 : 60）。SortCut 那邊拉也一樣，最後拉的為準")
+        self.hs_share.valueChanged.connect(lambda v: self.hs_share_lab.setText(f"FusionStitch {v * 10} : {100 - v * 10} {self._hs_other}"))
+        self.hs_share.sliderReleased.connect(lambda: self._hs_act(share=self.hs_share.value() * 10))
+        hr.addWidget(self.hs_share)
+        self._hs_other = "SortCut"
+        self.hs_share_lab = QLabel(""); self.hs_share_lab.setFixedWidth(180); hr.addWidget(self.hs_share_lab)
+        self.hs_res_on = QCheckBox("我在用電腦時留"); self.hs_res_on.setToolTip("鍵盤／滑鼠幾分鐘內有動：兩邊合起來只用剩下的（50:50、留 40% → 30:30）")
+        self.hs_res_on.toggled.connect(lambda v: self._hs_act(reserve_on=bool(v))); hr.addWidget(self.hs_res_on)
+        self.hs_res = QSpinBox(); self.hs_res.setRange(0, 80); self.hs_res.setSingleStep(10); self.hs_res.setSuffix("%")
+        self.hs_res.editingFinished.connect(lambda: self._hs_act(reserve=self.hs_res.value())); hr.addWidget(self.hs_res)
+        hr.addWidget(QLabel("優先"))
+        self.hs_prio = QSpinBox(); self.hs_prio.setRange(0, 10); self.hs_prio.setToolTip("比對方大 → 這邊先跑、對方讓路（預設 5 ＝ 一樣，照分配）")
+        self.hs_prio.editingFinished.connect(lambda: self._hs_act(prio=self.hs_prio.value())); hr.addWidget(self.hs_prio)
+        self.hs_boost = QPushButton("⏩ 這邊先跑 1 小時"); self.hs_boost.clicked.connect(lambda: self._hs_act(boost=0 if self._hs_boosting else 1))
+        hr.addWidget(self.hs_boost)
+        self._hs_boosting = False
+        hr.addStretch(1)
+        l.addLayout(hr)
+        self.hs_now = QLabel(""); self.hs_now.setObjectName("sub"); self.hs_now.setWordWrap(True); l.addWidget(self.hs_now)
+        self._hs_busy = False
         self._pace_ui()
         try:
             import batch_panel
@@ -2523,6 +2550,52 @@ class QueuePage(QWidget):
             pass
         self._pace_ui()
 
+    def _hs_act(self, **kw):
+        if getattr(self, "_hs_busy", False):
+            return
+        try:
+            import hsbridge
+            r = hsbridge.act(kw)
+            if hasattr(self.main, "toast"):
+                self.main.toast(r.get("message", ""))
+        except Exception as e:
+            core.log(f"handshake ui: {e}")
+        self._pace_ui()
+
+    def _hs_ui(self):
+        try:
+            import hsbridge
+            st = hsbridge.status()
+        except Exception as e:
+            self.hs_now.setText(f"握手：{e}")
+            return
+        self._hs_busy = True
+        try:
+            self._hs_other = st.get("other") or "SortCut"
+            self.hs_on.setChecked(bool(st["on"]))
+            if not self.hs_share.isSliderDown():
+                self.hs_share.setValue(max(1, min(9, int(round((st.get("share") or 50) / 10)))))
+            self.hs_share_lab.setText(f"FusionStitch {self.hs_share.value() * 10} : {100 - self.hs_share.value() * 10} {self._hs_other}")
+            self.hs_res_on.setChecked(bool(st.get("reserve_on")))
+            if not self.hs_res.hasFocus():
+                self.hs_res.setValue(int(st.get("reserve") or 0))
+            if not self.hs_prio.hasFocus():
+                self.hs_prio.setValue(int(st.get("prio") or 5))
+            left = st.get("boost_until", 0) - time.time()
+            self._hs_boosting = left > 0
+            self.hs_boost.setText(f"取消先跑（剩 {int(left // 60) + 1} 分）" if left > 0 else "⏩ 這邊先跑 1 小時")
+            P = st.get("peers") or []
+            who = "、".join(f"{p.get('name')} V{p.get('ver')}（{p.get('what') or '閒著'}）" for p in P) or "沒看到 SortCut"
+            M = {"alone": "照常跑", "lead": "這邊先跑", "yield": "讓對方先", "split": "照分配"}
+            txt = f"　{who} · {M.get(st.get('mode'), st.get('mode'))}：{st.get('why', '')} · 規則第 {st.get('rules')} 版"
+            self.hs_now.setText(txt if st["on"] else "　握手關著（兩邊各跑各的）")
+            self.hs_now.setToolTip((st.get("err") or "") + ("\n" if st.get("err") else "") +
+                                   f"這邊的規則第 {st.get('rules_own')} 版；用的是{'對方提供的較新版' if st.get('rules_from') == 'lib' else '自己的'}。"
+                                   + (f"\n分配最後由 {st.get('policy_by')} 改" if st.get("policy_by") else ""))
+            self.hs_now.setStyleSheet("color:#ffb347" if st.get("mode") in ("yield", "split") else "")
+        finally:
+            self._hs_busy = False
+
     def _pace_ui(self):
         try:
             import pace
@@ -2534,6 +2607,8 @@ class QueuePage(QWidget):
             self.pace_now.setStyleSheet("color:#ffb347" if st["level"] < 0.999 else "color:#45d483")
         except Exception:
             pass
+        if hasattr(self, "hs_now"):
+            self._hs_ui()
 
     def _left(self, j):
         try:
@@ -3915,6 +3990,11 @@ class MainWindow(QMainWindow):
                 if ch.pid in keep:                  # the EXE swapper must outlive us
                     continue
                 ch.kill()
+        except Exception:
+            pass
+        try:
+            import hsbridge
+            hsbridge.stop()                       # 🤝 對方馬上知道這邊不在了
         except Exception:
             pass
         try:

@@ -771,6 +771,16 @@ class JobQueue:
             if len(act) >= limit or (act and not all(self._past_prep(j) for j in act)):
                 self.cv.wait(2)
                 return
+            try:                              # 🤝 握手：對方按了「這邊先跑」/優先比較高 → 新的先不開
+                import hsbridge
+                hold = hsbridge.no_new()
+            except Exception:
+                hold = False
+            if hold:
+                self.hs_hold = True
+                self.cv.wait(3)
+                return
+            self.hs_hold = False
             job = next((j for j in self.jobs if j.status == "queued" and getattr(j, "not_before", 0) <= time.time()), None)
             if job is None:
                 return

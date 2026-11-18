@@ -57,8 +57,17 @@ def state() -> dict:
         level = pct / 100 if active else 1.0
     else:
         level = 1.0
+    hs_lv, hs_txt = 1.0, ""
+    try:                                   # 🤝 握手（SortCut 也在跑重工作時照分配放慢）
+        import hsbridge
+        hs_lv = hsbridge.level()
+        hs_txt = hsbridge.label()
+    except Exception:
+        pass
+    own = level
+    level = min(level, hs_lv)
     st = {"mode": mode, "pct": pct, "level": level, "active": active, "idle_min": idle_min,
-          "idle": idle}
+          "idle": idle, "own": own, "hs": hs_txt if hs_lv < own - 0.001 else ""}
     _cache.update(t=now, state=st)
     _priority(level < 0.999)
     return dict(st)
@@ -113,6 +122,8 @@ def copy_rest(nbytes: int, seconds: float):
 
 def label(st: dict | None = None) -> str:
     st = st or state()
+    if st.get("hs"):
+        return st["hs"]
     if st["mode"] == "full":
         return "全速"
     if st["mode"] == "manual":
