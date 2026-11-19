@@ -74,6 +74,26 @@ jobs:
           foreach ($x in @("app", "selftest_pkg", "LOG", "UPDATE", "Package", "tools")) { if (Test-Path "$d/$x") { Remove-Item -Recurse -Force "$d/$x" } }
           foreach ($x in @("selftest.json", "selftest_step.txt")) { if (Test-Path "$d/$x") { Remove-Item -Force "$d/$x" } }
           if ($code -ne 0) { throw "EXE 自我測試沒過（exit $code）" }
+      - name: 用使用者現在的 EXE 試新程式（只熱更新、不換 EXE：新程式在舊 EXE 上跑不起來就不發）
+        shell: pwsh
+        timeout-minutes: 8
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ("${{ steps.v.outputs.launcher }}" -ne "3") { throw "LAUNCHER_VERSION 不能改（使用者決定只熱更新、不換 EXE）" }
+          $u = "work/userexe"
+          gh release download v2.19.3 --repo "${{ github.repository }}" --pattern "FS_Shell_L3.zip" --dir work --clobber
+          Expand-Archive -LiteralPath work/FS_Shell_L3.zip -DestinationPath $u -Force
+          Copy-Item -Recurse app "$u/app"
+          New-Item -ItemType Directory -Force "$u/tools/ffmpeg" | Out-Null
+          New-Item -ItemType File -Force "$u/tools/ffmpeg/ffmpeg.exe", "$u/tools/ffmpeg/ffprobe.exe" | Out-Null
+          $p = Start-Process -FilePath "$u/FusionStitch.exe" -ArgumentList "--launcher-selftest" -PassThru
+          $ok = $p.WaitForExit(300000)
+          if (Test-Path "$u/selftest_step.txt") { Get-Content "$u/selftest_step.txt" | Select-Object -Last 5 }
+          if (-not $ok) { Stop-Process -Id $p.Id -Force; throw "舊 EXE 自我測試 5 分鐘沒結束" }
+          if (-not (Test-Path "$u/selftest.json")) { throw "舊 EXE 自我測試沒有寫出結果（exit $($p.ExitCode)）" }
+          Get-Content "$u/selftest.json"
+          if ($p.ExitCode -ne 0) { throw "新程式在使用者現在的 EXE（第 3 版）上跑不起來：用到 EXE 裡沒有的東西了，請改用已有的模組" }
       - name: 做更新包和 update.json
         run: python tools/make_release.py --dist work/dist/FusionStitch --out out --repo "${{ steps.r.outputs.repo }}"
       - uses: actions/upload-artifact@v4

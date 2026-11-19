@@ -146,6 +146,14 @@ def busy_jobs() -> list[dict]:
     return out
 
 
+SHELL_SWAP = False    # 使用者決定（2026-11-19）：以後只熱更新、不再換 EXE。雲端打包也會先用使用者現在的 EXE 測過新程式
+
+
+def _need_shell(info: dict) -> bool:
+    """換 EXE 已經停用：永遠只熱更新程式（app\*）。"""
+    return SHELL_SWAP and bool(info.get("shell")) and int(info.get("launcher") or 1) > launcher()
+
+
 def check(manual: bool = False) -> dict:
     """Read update.json (background thread). Only announces; never downloads."""
     st = _st()
@@ -165,7 +173,7 @@ def check(manual: bool = False) -> dict:
             if str(info.get("app") or "FusionStitch") != "FusionStitch" or not info.get("version"):
                 err = f"{u}：不是 FusionStitch 的 update.json"
                 continue
-            need_shell = bool(info.get("shell")) and int(info.get("launcher") or 1) > launcher()
+            need_shell = _need_shell(info)
             newer_code = vkey(info["version"]) > vkey(core.APP_VERSION)
             R = {"ok": True, "info": info, "url": u, "t": time.time(), "need_shell": need_shell,
                  "newer_code": newer_code, "newer": newer_code or need_shell, "cur": core.APP_VERSION, "launcher": launcher()}
@@ -300,7 +308,7 @@ def update(force: bool = False) -> dict:
     info = R["info"]
     # the check may be older than a hot update that happened since: decide again with the running version
     R["newer_code"] = vkey(info["version"]) > vkey(core.APP_VERSION)
-    R["need_shell"] = bool(info.get("shell")) and int(info.get("launcher") or 1) > launcher()
+    R["need_shell"] = _need_shell(info)
     R["newer"] = R["newer_code"] or R["need_shell"]
     if not R["newer"]:
         return {"ok": False, "message": f"已經是最新 V{core.APP_VERSION}"}
@@ -402,7 +410,7 @@ def status() -> dict:
     if c.get("ok") and c.get("info"):                     # re-judge against the running version (after a hot update)
         I_ = c["info"]
         c["newer_code"] = vkey(I_["version"]) > vkey(core.APP_VERSION)
-        c["need_shell"] = bool(I_.get("shell")) and int(I_.get("launcher") or 1) > launcher()
+        c["need_shell"] = _need_shell(I_)
         c["newer"] = c["newer_code"] or c["need_shell"]
     I = c.get("info") or {}
     dl = st.get("dl")

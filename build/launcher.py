@@ -19,7 +19,7 @@ from pathlib import Path
 
 # 程式會用到的模組列在 build/_deps.py，打包時用 --hidden-import _deps 包進 EXE（執行時不先全部載入）
 
-LAUNCHER_VERSION = 3          # 2：V2.19.0 雲端自動更新（設 FS_LAUNCHER）；3：V2.19.2 新 EXE 自己換上去（--fs-swap，不用 BAT）
+LAUNCHER_VERSION = 3          # ⛔ 不要再改（2026-11-19 使用者決定：只熱更新、不換 EXE；雲端打包會擋）。 2：V2.19.0 雲端自動更新（設 FS_LAUNCHER）；3：V2.19.2 新 EXE 自己換上去（--fs-swap，不用 BAT）
 EXE_NAME = "FusionStitch.exe"
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
 APP_DIR = ROOT / "app"
