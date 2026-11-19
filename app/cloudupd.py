@@ -150,7 +150,7 @@ SHELL_SWAP = False    # 使用者決定（2026-11-19）：以後只熱更新、�
 
 
 def _need_shell(info: dict) -> bool:
-    """換 EXE 已經停用：永遠只熱更新程式（app\*）。"""
+    """換 EXE 已經停用：永遠只熱更新程式（app 資料夾）。"""
     return SHELL_SWAP and bool(info.get("shell")) and int(info.get("launcher") or 1) > launcher()
 
 
