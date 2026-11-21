@@ -96,6 +96,8 @@ class OutputsPage(QWidget):
         self.b_rm = QPushButton("從清單移除"); self.b_rm.setToolTip("只是不在這裡顯示，電腦上的資料夾和影片都不會刪除")
         self.b_rm.clicked.connect(self.remove_folder); top.addWidget(self.b_rm)
         b = QPushButton("🎨 補上色彩標記"); b.clicked.connect(self.color_tag); top.addWidget(b)
+        b = QPushButton("🧪 成品健檢"); b.clicked.connect(self.out_check); top.addWidget(b)
+        b.setToolTip("找出 0 位元組、打不開、長度不對、沒有 360 資訊、沒有色彩標記的成品；能補的補（不重新轉檔），壞的搬到「_問題檔」（不刪）")
         b.setToolTip("過渡用：V2.19.5 以前轉的影片沒有色彩標記，YouTube 可能偏色。\n找出這些影片、原地補上標記（不重新轉檔、畫質不變、360 資訊保留）")
         b = QPushButton("開啟成品資料夾"); b.clicked.connect(self.open_folder); top.addWidget(b)
         b = QPushButton("重新整理"); b.clicked.connect(self.refresh); top.addWidget(b)
@@ -164,6 +166,56 @@ class OutputsPage(QWidget):
         outfolders.remove(sel)
         self.fsel.setCurrentIndex(0)
         self.refresh()
+
+    def out_check(self):
+        """🧪 成品健檢 (same folders as 🎨)."""
+        import outcheck
+        import outfolders
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox
+        sel = self.fsel.currentData()
+        outcheck.scan_async([Path(sel)] if sel else outfolders.all_())
+        dlg = QDialog(self); dlg.setWindowTitle("🧪 成品健檢"); dlg.resize(720, 500)
+        v = QVBoxLayout(dlg)
+        head = QLabel("檢查中…"); head.setWordWrap(True); v.addWidget(head)
+        lst = QListWidget(); v.addWidget(lst, 1)
+        note = QLabel("🔧 補＝不重新轉檔，補上 360 資訊和色彩標記；📦 移走＝搬到同資料夾的「_問題檔」，不會刪。")
+        note.setObjectName("sub"); note.setWordWrap(True); v.addWidget(note)
+        bb = QDialogButtonBox(); go = bb.addButton("處理勾選的", QDialogButtonBox.AcceptRole)
+        bb.addButton("關閉", QDialogButtonBox.RejectRole).clicked.connect(dlg.reject); v.addWidget(bb)
+        go.setEnabled(False)
+        box = {}
+
+        def poll():
+            st = outcheck.status()
+            if st["scanning"]:
+                head.setText(f"檢查中 {st['done']}/{st['total']}…"); return
+            if not box.get("shown") and st["found"] is not None:
+                box["shown"] = True
+                for x in st["found"]:
+                    it = QListWidgetItem(f"{x['name']}　⚠ {x['txt']}　→ {'🔧 補' if x['fix'] else '📦 移走'}")
+                    it.setData(Qt.UserRole, {"path": x["path"], "action": "fix" if x["fix"] else "move"})
+                    it.setFlags(it.flags() | Qt.ItemIsUserCheckable); it.setCheckState(Qt.Checked); it.setToolTip(x["path"])
+                    lst.addItem(it)
+                head.setText(f"{st['total']} 支裡有 {len(st['found'])} 支有問題（預設全勾）" if st["found"] else f"{st['total']} 支都沒問題 👍")
+                go.setEnabled(bool(st["found"]))
+            f = st.get("fixing") or {}
+            if box.get("run") and f:
+                if f.get("busy"):
+                    head.setText(f"補資訊中 {f['done']}/{f['total']}：{f['cur']}")
+                else:
+                    box["run"] = False
+                    head.setText(f"完成：補好 {len(f.get('ok') or [])} 支" + (f"，失敗 {len(f['fail'])} 支：" + "；".join(f["fail"]) if f.get("fail") else ""))
+                    self.refresh()
+        tm = QTimer(dlg); tm.timeout.connect(poll); tm.start(500)
+
+        def run():
+            items = [lst.item(i).data(Qt.UserRole) for i in range(lst.count()) if lst.item(i).checkState() == Qt.Checked]
+            r = outcheck.run_fix(items)
+            head.setText(r.get("message", "")); go.setEnabled(False); lst.clear()
+            box["run"] = any(i["action"] == "fix" for i in items)
+            self.refresh()
+        go.clicked.connect(run)
+        dlg.exec()
 
     def color_tag(self):
         """過渡用 🎨: find outputs without colour tags in the folder(s) shown and tag them in place."""

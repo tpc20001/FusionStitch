@@ -430,6 +430,11 @@ document.addEventListener("change",async e=>{const t=e.target;if(!t||!t.dataset)
 document.addEventListener("input",e=>{const t=e.target;if(t&&t.id==="hsR"){const o=document.getElementById("hsV");if(o)o.textContent=`FusionStitch ${t.value*10} : ${100-t.value*10} ${o.dataset.o}`;}
   if(t&&t.id==="hsRes"){const o=document.getElementById("hsRV");if(o)o.textContent=t.value+"%";}});
 document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.closest("[data-hsb]");if(!b)return;await act("/api/hs",{boost:+b.dataset.hsb});viewQueue();});
+function aftH(a){if(!a)return "";const cd=a.countdown!=null;
+  return `<div class="pcbox"${cd?' style="border-color:#ff6b6b"':""}><div class="pchd"><b>🧪 全部轉完後</b><select id="aftSel" style="margin-left:auto">${[["none","不動作"],["sleep","睡眠"],["shutdown","關機"]].map(([k,t])=>`<option value="${k}" ${a.mode===k?"selected":""}>${t}</option>`).join("")}</select></div>
+${cd?`<div style="color:#ff6b6b;font-weight:700;margin:6px 0">⏳ ${a.countdown} 秒後${esc(a.txt)}　<button class="pill" data-aftx="1">取消</button></div>`:`<div class="snote">${a.mode==="none"?"佇列做完不會怎樣":`還剩 ${a.left} 支，全部做完會倒數 60 秒再${esc(a.txt)}（做一次就回到不動作）`}</div>`}</div>`;}
+document.addEventListener("change",async e=>{if(e.target&&e.target.id==="aftSel"){await act("/api/after",{mode:e.target.value});viewQueue();}});
+document.addEventListener("click",async e=>{if(e.target.closest&&e.target.closest("[data-aftx]")){await act("/api/after",{cancel:true});viewQueue();}});
 function hsH(h){if(!h)return "";const M={alone:"照常跑",lead:"這邊先跑",yield:"讓對方先",split:"照分配"};const P=h.peers||[];const o=h.other||"SortCut";
   const who=P.length?P.map(p=>`${esc(p.name)} V${esc(p.ver)}（${esc(p.what||"閒著")}）`).join("、"):"沒看到 "+esc(o);
   const left=h.boost_until-Date.now()/1000;const sh=Math.round((h.share||50)/10);
@@ -481,7 +486,7 @@ async function viewQueue(){const host=V();if(!S.q)host.innerHTML='<div class="em
 <div class="tools" style="margin-top:6px"><span class="snote" style="margin:0;flex:none">全部轉完後</span><div class="seg" id="qafter">${A.map(([k,t])=>`<button data-k="${k}"${k===d.after?' class="on"':""}>${t}</button>`).join("")}</div></div>
 <div class="snote">${run?`▶ #${run.id} ${esc(run.title)} ${(run.progress*100).toFixed(1)}% · ${run.fps.toFixed(1)} fps · 剩 ${fd(run.eta)}`:"閒置"} · 排隊 ${d.jobs.filter(j=>j.status==="queued").length}</div></div>
 <div class="panel">
-${d.pace?paceH(d.pace):""}${hsH(d.hs)}<div class="r2"><span>💽 中繼 SSD</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir||"不使用")}</b><button class="pill" id="pc" style="flex:none">選擇…</button>${d.cache_dir?'<button class="pill" id="pcx" style="flex:none">不使用</button>':""}</div>
+${d.pace?paceH(d.pace):""}${hsH(d.hs)}${aftH(d.after)}<div class="r2"><span>💽 中繼 SSD</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir||"不使用")}</b><button class="pill" id="pc" style="flex:none">選擇…</button>${d.cache_dir?'<button class="pill" id="pcx" style="flex:none">不使用</button>':""}</div>
 ${d.cache_dir?`<div class="r2" style="margin-top:6px"><span>💽 中繼 2（備援）</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir2||"不使用")}</b><button class="pill" id="pc2" style="flex:none">選擇…</button>${d.cache_dir2?'<button class="pill" id="pc2x" style="flex:none">不使用</button>':""}</div>`:""}
 <div class="r2" style="margin-top:6px"><span>📦 成品送到</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.dest||"素材資料夾裡的 stitched")}</b><button class="pill" id="pd" style="flex:none">選擇…</button>${d.dest?'<button class="pill" id="pdx" style="flex:none">回預設</button>':""}</div>
 ${d.relay_use?`<div class="snote">📥 中繼已先存素材：${(d.relay_use.roots||[{drive:"",used:d.relay_use.used,cap:d.relay_use.cap,main:true}]).map(x=>`${esc(x.drive)}${x.main?"（主要）":"（備援）"} ${fmtB(x.used)}${x.cap?" / "+fmtB(x.cap):""}`).join("　")}（正在轉的和下一支一定先存，其他滿了就等）</div>`:""}${d.relay?`<div class="snote">${esc(d.relay)}</div>`:""}</div>`;
@@ -692,7 +697,7 @@ async function viewOuts(){$("#clk").textContent="";const host=V();if(OUTSEL===nu
   if(OUTSEL==="")lsSet("fs_outs_seen",String(d.items.length?d.items[0].mtime:0));if($("#no"))$("#no").hidden=true;
   const fname=i=>{const f=d.folders.find(x=>x.i===i);return f?f.name:"";};
   const all=d.folders.reduce((a,f)=>a+f.count,0);
-  const chips=`<div class="ofc"><button class="ofb${OUTSEL===""?" on":""}" data-od="">全部 <b>${all}</b></button>${d.folders.map(f=>`<span class="ofb${OUTSEL===String(f.i)?" on":""}${f.exists?"":" miss"}"><button data-od="${f.i}" title="${esc(f.path)}">${f.current?"📦":"🗂"} ${esc(f.name)} <b>${f.count}</b>${f.exists?"":" ⚠"}</button>${f.removable?`<button class="ofx" data-orm="${esc(f.path)}" title="從清單移除（不會刪除電腦上的資料夾和檔案）">✕</button>`:""}</span>`).join("")}<button class="ofb ofadd" id="oAdd">＋ 加入資料夾</button><button class="ofb" id="oTag" title="過渡用：V2.19.5 以前的影片補上色彩標記（不重新轉檔）">🎨 補色彩標記</button></div>`;
+  const chips=`<div class="ofc"><button class="ofb${OUTSEL===""?" on":""}" data-od="">全部 <b>${all}</b></button>${d.folders.map(f=>`<span class="ofb${OUTSEL===String(f.i)?" on":""}${f.exists?"":" miss"}"><button data-od="${f.i}" title="${esc(f.path)}">${f.current?"📦":"🗂"} ${esc(f.name)} <b>${f.count}</b>${f.exists?"":" ⚠"}</button>${f.removable?`<button class="ofx" data-orm="${esc(f.path)}" title="從清單移除（不會刪除電腦上的資料夾和檔案）">✕</button>`:""}</span>`).join("")}<button class="ofb ofadd" id="oAdd">＋ 加入資料夾</button><button class="ofb" id="oTag" title="過渡用：V2.19.5 以前的影片補上色彩標記（不重新轉檔）">🎨 補色彩標記</button><button class="ofb" id="oChk" title="🧪 找出壞檔、沒有 360 資訊、沒有色彩標記、長度不對的成品">🧪 健檢</button></div>`;
   const sh=OUTSEL===""?`${d.folders.length} 個資料夾`:esc(d.folder);
   host.innerHTML=`<style>.ofc{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px}.ofb{display:inline-flex;align-items:center;background:var(--btn);border:1px solid var(--line2);border-radius:999px;color:var(--text);font:inherit;font-size:13px;overflow:hidden}
 .ofb>button,button.ofb{background:none;border:0;color:inherit;font:inherit;padding:6px 11px}.ofb b{color:var(--sub);font-weight:700;margin-left:3px}.ofb.on{background:#16324a;border-color:#2b8ad8;color:#fff}.ofb.on b{color:#9fd3ff}
@@ -704,6 +709,8 @@ async function viewOuts(){$("#clk").textContent="";const host=V();if(OUTSEL===nu
   host.onclick=async e=>{const b=e.target.closest("button");if(!b)return;
     if(b.dataset.od!==undefined){OUTSEL=b.dataset.od;lsSet("fs_outdir",OUTSEL);viewOuts();return;}
     if(b.dataset.orm){if(confirm("把這個資料夾從成品清單移除？\n\n只是不在這裡顯示，電腦上的資料夾和裡面的影片都不會刪除。\n\n"+b.dataset.orm)){await act("/api/outfolders/remove",{path:b.dataset.orm});OUTSEL="";lsSet("fs_outdir","");viewOuts();}return;}
+    if(b.id==="oChk"){outChk(OUTSEL===""?"":(d.folders.find(f=>String(f.i)===OUTSEL)||{}).path||"");return;}
+    if(b.id==="ocGo"){const it=[...document.querySelectorAll("#player [data-oc]:checked")].map(x=>({path:x.dataset.oc,action:x.dataset.act}));if(!it.length)return toast("沒有勾選");const j=await act("/api/outcheck/run",{items:it});if(j.ok)ctWatch();return;}
     if(b.id==="oTag"){colorTag(OUTSEL===""?"":(d.folders.find(f=>String(f.i)===OUTSEL)||{}).path||"");return;}
     if(b.id==="ctGo"){const ps=[...document.querySelectorAll("#player input[data-ct]:checked")].map(x=>x.dataset.ct);if(!ps.length)return toast("沒有勾選");const j=await act("/api/colortag/run",{paths:ps});if(j.ok)ctWatch();return;}
     if(b.id==="ctX"){$("#player").innerHTML="";return;}
@@ -712,6 +719,15 @@ async function viewOuts(){$("#clk").textContent="";const host=V();if(OUTSEL===nu
     else if(b.dataset.rq){if(confirm("用同一段素材、同一個預設重新轉檔？"))await act("/api/outputs/requeue",{name:b.dataset.rq});}
     else if(b.dataset.del){if(confirm("刪除這個成品檔案？（原始素材不受影響）\n\n"+b.dataset.fn)){await act("/api/outputs/delete",{name:b.dataset.del});viewOuts();}}};
   if(S.play){const n=S.play;S.play=null;const it=d.items.find(o=>o.name===n||(o.file===n&&d.folders[o.dir]&&d.folders[o.dir].current));if(it)play(it.name);else toast("成品還在搬運，或不在成品資料夾");}}
+async function outChk(dir){const p=$("#player");if(!p)return;
+  p.innerHTML='<div class="panel"><b>🧪 成品健檢</b><div class="snote" id="ocS">準備中…</div></div>';
+  await post("/api/outcheck/scan",{dir});let d;
+  for(let i=0;i<2000;i++){await new Promise(r=>setTimeout(r,800));try{d=await J("/api/outcheck");}catch(e){continue;}const s=$("#ocS");if(s)s.textContent=`檢查中 ${d.done}/${d.total}…`;if(!d.scanning&&d.found)break;}
+  if(!d||!d.found){p.innerHTML="";return;}const L=d.found;
+  p.innerHTML=`<div class="panel"><div class="r1"><b>🧪 成品健檢</b><button class="pill" id="ctX" style="flex:none;margin-left:auto">✕</button></div>`+
+   (L.length?`<div class="snote">${d.total} 支裡有 ${L.length} 支有問題。能補的「補」（不重新轉檔）；壞的「移走」＝搬到同資料夾的「_問題檔」（不會刪）。</div>
+<div style="max-height:45vh;overflow:auto;margin:6px 0">${L.map(x=>`<label style="display:flex;gap:8px;padding:6px 2px;font-size:13px;word-break:break-all;border-bottom:1px solid var(--line)"><input type="checkbox" checked data-oc="${esc(x.path)}" data-act="${x.fix?"fix":"move"}"><span><b>${esc(x.name)}</b><br><small style="color:#ff9f43">${esc(x.txt)}</small> → ${x.fix?"🔧 補":"📦 移走"}</span></label>`).join("")}</div>
+<button class="pill" id="ocGo" style="width:100%">處理勾選的</button><div class="snote" id="ctSt"></div>`:`<div class="snote">${d.total} 支都沒問題 👍</div>`)+`</div>`;}
 async function colorTag(dir){const p=$("#player");if(!p)return;
   p.innerHTML='<div class="panel"><b>🎨 補上色彩標記</b><div class="snote">正在找沒有色彩標記的影片…</div></div>';
   await post("/api/colortag/scan",{dir});let d;

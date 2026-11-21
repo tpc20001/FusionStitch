@@ -349,7 +349,12 @@ def queue_state() -> dict:
         hst = hsbridge.status()
     except Exception:
         hst = None
-    return {"pace": pst, "hs": hst, "relay_use": ru, "batches": bs["batches"], "drives": bs["drives"], "jobs": jobs_, "after": core.cfg("after_queue") or "none", "relay": relay,
+    try:
+        import outcheck
+        aft = outcheck.after_status()
+    except Exception:
+        aft = None
+    return {"pace": pst, "hs": hst, "after": aft, "relay_use": ru, "batches": bs["batches"], "drives": bs["drives"], "jobs": jobs_, "after": core.cfg("after_queue") or "none", "relay": relay,
             "cache_dir": core.cfg("cache_dir") or "", "cache_dir2": core.cfg("cache_dir2") or "",
             "dest": core.cfg("out_folder") if core.cfg("out_folder_mode") == "custom" else ""}
 
@@ -988,6 +993,9 @@ def handle(method: str, path: str, query: dict, body: dict, remote) -> tuple:
             if path == "/api/cloud":
                 import cloudupd
                 return J(cloudupd.status())
+            if path == "/api/outcheck":
+                import outcheck
+                return J({**outcheck.status(), "after": outcheck.after_status()})
             if path == "/api/hs":
                 import hsbridge
                 return J(hsbridge.status())
@@ -1068,6 +1076,17 @@ def handle(method: str, path: str, query: dict, body: dict, remote) -> tuple:
                 core.set_cfg("cloud_on", bool(body.get("on")))
                 return J({"ok": True, "message": "自動檢查更新：" + ("開" if body.get("on") else "關")})
             return J({"ok": False, "message": "不認得的動作"})
+        if path == "/api/outcheck/scan":
+            import outcheck
+            import outfolders
+            d = str(body.get("dir") or "")
+            return J(outcheck.scan_async([Path(d)] if d else outfolders.all_()))
+        if path == "/api/outcheck/run":
+            import outcheck
+            return J(outcheck.run_fix(list(body.get("items") or [])))
+        if path == "/api/after":
+            import outcheck
+            return J(outcheck.after_set(body.get("mode"), bool(body.get("cancel"))))
         if path == "/api/hs":
             import hsbridge
             return J(hsbridge.act(body))

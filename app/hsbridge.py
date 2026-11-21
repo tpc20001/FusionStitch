@@ -64,6 +64,11 @@ def _cpu() -> float:
 
 def state() -> dict:
     now = time.time()
+    try:                                    # 🧪 全部轉完後（睡眠／關機）跟著這個 2 秒的背景迴圈檢查
+        import outcheck
+        outcheck.tick()
+    except Exception:
+        pass
     a = _app()
     q = getattr(a, "_fs_queue", None)
     js = list(getattr(q, "jobs", []) or [])
