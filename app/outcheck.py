@@ -156,6 +156,7 @@ def _queue_left() -> tuple[int, int]:
     except Exception:
         js = []
     left = [j for j in js if j.status in ("running", "queued", "paused", "waiting")]
+    _A["failed"] = len([j for j in js if j.status in ("failed", "error")])
     return len(left), len(js)
 
 
@@ -211,4 +212,4 @@ def after_set(mode: str | None = None, cancel: bool = False) -> dict:
 def after_status() -> dict:
     left, tot = _queue_left()
     cd = max(0, int(COUNT - (time.time() - _A["armed"]))) if _A["armed"] else None
-    return {"mode": after_mode(), "txt": AFTER_TXT[after_mode()], "left": left, "countdown": cd}
+    return {"mode": after_mode(), "txt": AFTER_TXT[after_mode()], "left": left, "countdown": cd, "failed": _A.get("failed", 0)}

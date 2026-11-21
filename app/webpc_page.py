@@ -204,6 +204,8 @@ video{width:100%;border-radius:8px;background:#000;margin-top:6px}
 .calft{display:flex;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}.calsel{flex:1;color:var(--text);font-weight:700;font-size:13px;word-break:break-all}
 .calclr{background:var(--btn);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 14px}.calok{background:var(--accent);border:0;color:#fff;border-radius:10px;padding:9px 18px;font-weight:800}
 .lvb{--lc:#2ecc71;display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px 0 8px;border-radius:13px;border:1px solid color-mix(in srgb,var(--lc) 55%,transparent);background:color-mix(in srgb,var(--lc) 12%,transparent);color:var(--lc);font:700 12px/1 system-ui;cursor:pointer;margin-right:8px}
+@media(max-width:380px){.lvb .lvbars{display:none}.lvb{padding:0 7px;margin-right:2px}.lvm .lvrow{gap:6px}.lvm>div{padding:12px}}
+.lvb{flex:none}
 .lvb .lvbars{display:inline-flex;align-items:flex-end;gap:1.5px;height:16px}.lvb .lvbars i{width:3px;border-radius:1px;background:rgba(127,140,160,.35)}.lvb .lvbars i.on{background:var(--lc)}.lvb.off{--lc:#7f8a99}
 .lvm{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:12px}
 .lvm>div{background:#151a21;color:#e8edf3;border:1px solid #252c35;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:14px 16px;box-sizing:border-box}
@@ -435,7 +437,7 @@ document.addEventListener("input",e=>{const t=e.target;if(t&&t.id==="hsR"){const
 document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.closest("[data-hsb]");if(!b)return;await act("/api/hs",{boost:+b.dataset.hsb});viewQueue();});
 function aftH(a){if(!a)return "";const cd=a.countdown!=null;
   return `<div class="pcbox"${cd?' style="border-color:#ff6b6b"':""}><div class="pchd"><b>🧪 全部轉完後</b><select id="aftSel" style="margin-left:auto">${[["none","不動作"],["sleep","睡眠"],["shutdown","關機"]].map(([k,t])=>`<option value="${k}" ${a.mode===k?"selected":""}>${t}</option>`).join("")}</select></div>
-${cd?`<div style="color:#ff6b6b;font-weight:700;margin:6px 0">⏳ ${a.countdown} 秒後${esc(a.txt)}　<button class="pill" data-aftx="1">取消</button></div>`:`<div class="snote">${a.mode==="none"?"佇列做完不會怎樣":`還剩 ${a.left} 支，全部做完會倒數 60 秒再${esc(a.txt)}（做一次就回到不動作）`}</div>`}</div>`;}
+${cd?`<div style="color:#ff6b6b;font-weight:700;margin:6px 0">⏳ ${a.countdown} 秒後${esc(a.txt)}${a.failed?`（有 ${a.failed} 支失敗，回來再看）`:""}　<button class="pill" data-aftx="1">取消</button></div>`:`<div class="snote">${a.mode==="none"?"佇列做完不會怎樣":`還剩 ${a.left} 支，全部做完會倒數 60 秒再${esc(a.txt)}（做一次就回到不動作）`}</div>`}</div>`;}
 document.addEventListener("change",e=>{if(e.target&&e.target.id==="qkHide"){try{localStorage.setItem("fsQHide",e.target.checked?"1":"0");}catch(x){}S.qkSig=null;viewQuick();}});
 function finH(f){if(!f)return "";return `<div class="pcbox" style="padding:8px 12px"><b>⏱ 預計 ${fmtClk(f.at)} 全部完成</b> <span class="snote">（剩 ${fd(f.at-Date.now()/1000)}、${f.n} 支${f.partial?"，有幾支還沒有預估":""}）</span></div>`;}
 document.addEventListener("change",async e=>{if(e.target&&e.target.id==="aftSel"){await act("/api/after",{mode:e.target.value});viewQueue();}});
