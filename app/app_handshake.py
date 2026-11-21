@@ -36,6 +36,11 @@
     或 stuck=true（自己說卡住了）。stall_min（4）分鐘沒有進度 → 當作卡住：大家不讓了，照常全力跑；
     它沒報進度的話，看整張顯示卡的使用率（nvidia-smi）：剛開始 2 分鐘先讓（載模型），之後 stall_min 分鐘顯示卡都 < 25% → 當作卡住。
     卡住的會寫進每個程式狀態檔的 saw_stalled（ComfyRemote 看到可以自己決定：跳過、重送、重開 ComfyUI）。
+
+規則第 5 版（不浪費）：
+  * 照分配分（split）時，對方的狀態檔 use.busy（0～100：它實際用掉分到的幾 %）連續 60 秒都 < 60 →
+    這邊可以借它沒用到的 80%；它 busy 一回到 60 以上馬上還（下一輪就照原本分）。沒報 use.busy 的不借。
+  * 每個程式的狀態檔多寫 lv（現在的 Lv）和 cap（分到的 %），Lv 面板用來顯示每個程式各自的 Lv。
 """
 import json
 import os
@@ -45,7 +50,7 @@ import time
 from pathlib import Path
 
 PROTO = 'apphs/1'
-RULES = 4              # 規則版本：改 decide 的規則就加 1（越大越新）
+RULES = 5              # 規則版本：改 decide 的規則就加 1（越大越新）
 EVERY = 2.0            # 幾秒寫一次
 STALE = 10.0           # 幾秒沒更新算不在
 LOSE_CPU = 20.0        # 讓路的那邊：重工作最多用整台 CPU 的 %
@@ -165,7 +170,8 @@ def lead_of(a, b):
 
 def _brief(p):
     return {'app': p.get('app'), 'name': p.get('name'), 'ver': p.get('ver'), 'want': p.get('want'), 'prio': p.get('prio'), 'what': p.get('what'),
-            'use': p.get('use'), 'age': round(time.time() - float(p.get('t') or 0), 1), 'mode': p.get('mode'), 'rules': p.get('rules', 1)}
+            'use': p.get('use'), 'age': round(time.time() - float(p.get('t') or 0), 1), 'mode': p.get('mode'), 'rules': p.get('rules', 1),
+            'lv': p.get('lv'), 'cap': p.get('cap')}
 
 
 def member(app, pol):
@@ -174,6 +180,7 @@ def member(app, pol):
 
 
 _GPU = {'t': 0.0, 'v': None, 'busy_t': 0.0}
+_LOW = {}
 _BOSS = {}
 
 
@@ -275,7 +282,19 @@ def decide_with(me, P, pol=None, idle=None):
     if not tie:
         return out('lead', room, f'這邊先跑，{"、".join(nm_(p) for p in low)} 讓路', peer=nm_(low[0]))
     sh = share_of(my, tie, pol); cap = room * sh / 100.0
-    return out('split', cap, f'跟 {"、".join(nm_(p) for p in tie)} 分：這邊 {cap:.0f}%' + utxt,
+    borrow, bw = 0.0, ''
+    now = time.time()
+    for p in tie:                                                                # 🔁 對方分到卻沒用完 → 借
+        b = (p.get('use') or {}).get('busy')
+        k = str(p.get('app')); st = _LOW.setdefault(k, {'since': None})
+        if b is None or float(b) >= 60:
+            st['since'] = None; continue
+        if st['since'] is None: st['since'] = now
+        if now - st['since'] < 60: continue
+        pc = room * share_of(k, [x for x in tie if x is not p] + [me], pol) / 100.0
+        borrow += 0.8 * pc * (1 - float(b) / 100.0); bw += f'，{nm_(p)} 只用了 {float(b):.0f}% → 借 {0.8 * pc * (1 - float(b) / 100.0):.0f}%'
+    cap = min(budget, cap + borrow)
+    return out('split', cap, f'跟 {"、".join(nm_(p) for p in tie)} 分：這邊 {cap:.0f}%' + bw + utxt,
                share=round(sh, 1), peer=nm_(tie[0]), peer_want=int(tie[0].get('want') or 0), peer_what=tie[0].get('what', ''))
 
 
@@ -343,7 +362,7 @@ class Handshake:
                 'what': str(S.get('what') or '')[:120], 'use': dict(S.get('use') or {}), 'max': dict(S.get('max') or {}),
                 **{k: S[k] for k in ('prog', 'prog_t', 'stuck') if S.get(k) is not None},
                 'rules': int(getattr(m, 'RULES', RULES)) if m else RULES, 'rules_own': RULES,
-                'mode': (self.decide().get('mode') if self.me else 'alone'),
+                **({'mode': (_d := self.decide()).get('mode'), 'lv': _d.get('level'), 'cap': _d.get('cpu_cap')} if self.me else {'mode': 'alone'}),
                 'saw_stalled': [x.get('app') for x in ((self.decide().get('stalled') or []) if self.me else [])]}
 
     def write(self):

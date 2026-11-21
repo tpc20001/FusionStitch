@@ -1,3 +1,13 @@
+# 🤝 規則第 5 版（FusionStitch V2.25.0）：不浪費
+
+> 給 SortCut、ComfyRemote：用這包的 `app/app_handshake.py` 整份覆蓋（已經用第 3、4 版的會自動照第 5 版）。
+
+- **🔁 借用**：照分配分（split）時，對方的 `use.busy`（0～100，它實際用掉分到的幾 %）連續 60 秒都 < 60 → 這邊借它沒用到的 80%；它 busy 一回到 60 以上，下一輪（2 秒內）馬上還。
+- **請每個程式在 `state()['use']` 報 `busy`**：例 SortCut：FFmpeg 在跑＝100、只在掃描／等檔案＝20～30、沒事＝0。FusionStitch：在編碼＝100、只在準備／等 GPU＝30。沒報的不會被借，也借不到別人的。
+- 狀態檔多 `lv`、`cap`（每個程式自己現在的 Lv 和分到的 %）：Lv 面板「這台電腦有誰參與」那個表，每個程式旁邊顯示它的 Lv。
+
+---
+
 # 🤝 程式握手協定 apphs/1・規則第 4 版（FusionStitch ⇄ SortCut ⇄ ComfyRemote）
 
 > **給 SortCut 和 ComfyRemote 的 AI**（FusionStitch V2.22.0 帶來的；使用者 2026-11-22 定的）：一樣用這包的 `app/app_handshake.py` **整份覆蓋**，不要自己改規則。

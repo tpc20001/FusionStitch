@@ -99,7 +99,8 @@ def state() -> dict:
         _g["prog_t"] = now
     return {"on": core.cfg("hs_on") is not False, "want": want, "prog": prog, "prog_t": _g.get("prog_t", now) if (run or wait) else now,
             "prio": int(core.cfg("hs_prio") if core.cfg("hs_prio") is not None else 5), "what": what,
-            "use": {"cpu": _cpu(), "gpu": 0, "nvenc": len(enc), "disks": []}, "max": {"nvenc": 8}}
+            "use": {"cpu": _cpu(), "gpu": 0, "nvenc": len(enc), "disks": [],
+                    "busy": 100 if enc else (30 if run else 0)}, "max": {"nvenc": 8}}
 
 
 def hs():
