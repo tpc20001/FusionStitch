@@ -2482,7 +2482,7 @@ class QueuePage(QWidget):
         l.addLayout(pr)
         # 🤝 跟 SortCut 握手（分配拉桿兩邊共用）
         hr = QHBoxLayout()
-        self.hs_on = QCheckBox("🤝 跟 SortCut 握手"); self.hs_on.setChecked(cfg("hs_on") is not False)
+        self.hs_on = QCheckBox("🤝 握手（SortCut、ComfyRemote）"); self.hs_on.setChecked(cfg("hs_on") is not False)
         self.hs_on.setToolTip("同一台電腦上的 SortCut 也在轉檔時，兩邊照下面的比例分電腦的效能；對方閒著時這邊全速")
         self.hs_on.toggled.connect(lambda v: self._hs_act(on=bool(v))); hr.addWidget(self.hs_on)
         hr.addWidget(QLabel("分配"))
@@ -2493,7 +2493,7 @@ class QueuePage(QWidget):
         hr.addWidget(self.hs_share)
         self._hs_other = "SortCut"
         self.hs_share_lab = QLabel(""); self.hs_share_lab.setFixedWidth(180); hr.addWidget(self.hs_share_lab)
-        self.hs_res_on = QCheckBox("我在用電腦時留"); self.hs_res_on.setToolTip("鍵盤／滑鼠幾分鐘內有動：兩邊合起來只用剩下的（50:50、留 40% → 30:30）")
+        self.hs_res_on = QCheckBox("留給你"); self.hs_res_on.setToolTip("大家合起來只用剩下的（預設一直留 10%：FusionStitch、SortCut 各 45%）。手機右上角 Lv 可以改成「有在用電腦時才留」")
         self.hs_res_on.toggled.connect(lambda v: self._hs_act(reserve_on=bool(v))); hr.addWidget(self.hs_res_on)
         self.hs_res = QSpinBox(); self.hs_res.setRange(0, 80); self.hs_res.setSingleStep(10); self.hs_res.setSuffix("%")
         self.hs_res.editingFinished.connect(lambda: self._hs_act(reserve=self.hs_res.value())); hr.addWidget(self.hs_res)
@@ -2503,6 +2503,11 @@ class QueuePage(QWidget):
         self.hs_boost = QPushButton("⏩ 這邊先跑 1 小時"); self.hs_boost.clicked.connect(lambda: self._hs_act(boost=0 if self._hs_boosting else 1))
         hr.addWidget(self.hs_boost)
         self._hs_boosting = False
+        from PySide6.QtWidgets import QToolButton, QMenu
+        self.hs_mem = QToolButton(); self.hs_mem.setText("✅ 參與"); self.hs_mem.setPopupMode(QToolButton.InstantPopup)
+        self.hs_mem.setToolTip("這台電腦有哪些程式參與分配（沒在這台跑的不要勾）")
+        self.hs_mem_menu = QMenu(self.hs_mem); self.hs_mem.setMenu(self.hs_mem_menu)
+        self.hs_mem_menu.aboutToShow.connect(self._hs_mem_fill); hr.addWidget(self.hs_mem)
         hr.addStretch(1)
         l.addLayout(hr)
         self.hs_now = QLabel(""); self.hs_now.setObjectName("sub"); self.hs_now.setWordWrap(True); l.addWidget(self.hs_now)
@@ -2562,6 +2567,22 @@ class QueuePage(QWidget):
             core.log(f"handshake ui: {e}")
         self._pace_ui()
 
+    def _hs_mem_fill(self):
+        try:
+            import hsbridge
+            st = hsbridge.status()
+        except Exception:
+            return
+        m = self.hs_mem_menu; m.clear()
+        mem = st.get("members")
+        for a in st.get("apps") or []:
+            act = m.addAction(a); act.setCheckable(True); act.setChecked(mem is None or a in mem)
+
+            def tog(_c, a=a):
+                cur = [x.text() for x in m.actions() if x.isCheckable() and x.isChecked()]
+                self._hs_act(members=cur)
+            act.toggled.connect(tog)
+
     def _hs_ui(self):
         try:
             import hsbridge
@@ -2587,7 +2608,7 @@ class QueuePage(QWidget):
             P = st.get("peers") or []
             who = "、".join(f"{p.get('name')} V{p.get('ver')}（{p.get('what') or '閒著'}）" for p in P) or "沒看到 SortCut"
             M = {"alone": "照常跑", "lead": "這邊先跑", "yield": "讓對方先", "split": "照分配"}
-            txt = f"　{who} · {M.get(st.get('mode'), st.get('mode'))}：{st.get('why', '')} · 規則第 {st.get('rules')} 版"
+            txt = f"　Lv{st.get('lv')} · {who} · {M.get(st.get('mode'), st.get('mode'))}：{st.get('why', '')} · 規則第 {st.get('rules')} 版"
             self.hs_now.setText(txt if st["on"] else "　握手關著（兩邊各跑各的）")
             self.hs_now.setToolTip((st.get("err") or "") + ("\n" if st.get("err") else "") +
                                    f"這邊的規則第 {st.get('rules_own')} 版；用的是{'對方提供的較新版' if st.get('rules_from') == 'lib' else '自己的'}。"

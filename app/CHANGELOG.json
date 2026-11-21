@@ -1,5 +1,20 @@
 [
  {
+  "date": "2026-11-21",
+  "title": "🤝 三個程式一起分效能（SortCut、ComfyRemote）＋右上角 Lv",
+  "version": "2.21.0",
+  "items": [
+   "跟 SortCut、ComfyRemote 一起握手：平常 FusionStitch、SortCut 各 45%，一直留 10% 給你；只有一個在忙就用 90%",
+   "👑 ComfyRemote 一送出工作：它用 80%，FusionStitch 和 SortCut 先降到 5%（不中斷，做完自動慢慢升回來）",
+   "📶 手機右上角 Lv 1～10（跟 SortCut 一樣）：點進去看三個程式各在做什麼、改分配",
+   "✅ 勾選「這台電腦有誰參與」：沒在這台跑的程式不勾，就不會被算進去",
+   "握手規則第 3 版：三個程式共用同一份，誰更新新規則，另外兩邊自動照新的做"
+  ],
+  "details": [
+   "給 SortCut 和 ComfyRemote：用這包的 app/app_handshake.py 整份覆蓋，照 app/HANDSHAKE_握手協定.md 做"
+  ]
+ },
+ {
   "date": "2026-11-19",
   "title": "以後只熱更新、不再換 EXE",
   "version": "2.20.1",

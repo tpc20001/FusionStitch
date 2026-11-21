@@ -135,7 +135,7 @@ def level() -> float:
     """The conversion speed the handshake allows (0.05..1): down at once, back up slowly."""
     d = decide()
     cap = d.get("cpu_cap")
-    target = 1.0 if cap is None or d.get("mode") not in ("yield", "split") else max(0.05, min(1.0, float(cap) / 100.0))
+    target = 1.0 if cap is None else max(0.03, min(1.0, float(cap) / 100.0))
     now = time.time()
     lv = _g["lv"]
     last = _g.get("lt", now)
@@ -155,8 +155,8 @@ def no_new() -> bool:
 def label() -> str:
     d = decide()
     m = d.get("mode")
-    if m in ("yield", "split"):
-        return f"🤝 {d.get('why', '')} → {_g['lv'] * 100:.0f}%"
+    if d.get("cpu_cap") is not None:
+        return f"🤝 Lv{d.get('level', '')} {d.get('why', '')} → {_g['lv'] * 100:.0f}%"
     return ""
 
 
@@ -170,7 +170,7 @@ def status() -> dict:
         err = str(e)
     P = HS.policy()
     peers = d.get("peers") or []
-    other = peers[0]["app"] if peers else "SortCut"
+    other = "SortCut"                                        # (分配拉桿是 FusionStitch : SortCut)
     sh = P.get("share") or {}
     mine = float(sh.get("FusionStitch", 50))
     oth = float(sh.get(other, 50))
@@ -180,7 +180,10 @@ def status() -> dict:
             "reserve": P.get("reserve"), "reserve_on": P.get("reserve_on"), "idle_min": P.get("idle_min"),
             "user_active": d.get("user_active"), "budget": d.get("budget"), "level": round(_g["lv"], 2),
             "rules": d.get("rules"), "rules_own": HS.RULES, "rules_from": d.get("rules_from"), "err": err,
-            "policy_by": P.get("by", ""), "no_new": bool(d.get("no_new_heavy"))}
+            "policy_by": P.get("by", ""), "no_new": bool(d.get("no_new_heavy")),
+            "lv": d.get("level", 10), "cap": d.get("cpu_cap"), "apps": list(getattr(HS, "APPS", ["FusionStitch", "SortCut"])),
+            "members": P.get("members"), "boss": P.get("boss"), "boss_cap": P.get("boss_cap"), "others_cap": P.get("others_cap"),
+            "reserve_when": P.get("reserve_when", "active")}
 
 
 def act(body: dict) -> dict:
@@ -201,7 +204,7 @@ def act(body: dict) -> dict:
     pol = {}
     if body.get("share") is not None:
         s = max(10, min(90, float(body["share"])))
-        other = str(body.get("other") or status().get("other") or "SortCut")
+        other = str(body.get("other") or "SortCut")
         pol["share"] = {"FusionStitch": s, other: 100 - s}
         msg.append(f"分配：FusionStitch {s:.0f} : {100 - s:.0f} {other}")
     if body.get("reserve") is not None:
@@ -210,6 +213,17 @@ def act(body: dict) -> dict:
     if body.get("reserve_on") is not None:
         pol["reserve_on"] = bool(body["reserve_on"])
         msg.append("留給你：" + ("開" if body["reserve_on"] else "關"))
+    if "members" in body:
+        m = body["members"]
+        pol["members"] = None if m is None else [str(x) for x in m]
+        msg.append("參與：" + ("全部" if m is None else "、".join(pol["members"]) or "沒有"))
+    for k, t in (("boss_cap", "最優先的用"), ("others_cap", "其他降到")):
+        if body.get(k) is not None:
+            pol[k] = float(body[k])
+            msg.append(f"{t} {float(body[k]):.0f}%")
+    if body.get("reserve_when") in ("always", "active"):
+        pol["reserve_when"] = body["reserve_when"]
+        msg.append("留給你：" + ("一直留" if body["reserve_when"] == "always" else "有在用電腦時才留"))
     if pol:
         HS.set_policy("FusionStitch", **pol)
     _g["t"] = 0

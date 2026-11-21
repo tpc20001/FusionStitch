@@ -1,4 +1,4 @@
-"""🤝 程式握手（apphs/1，規則第 2 版）：同一台電腦上的幾個程式互相說「我現在要做什麼、用了多少」，誰需要就讓誰先跑。
+"""🤝 程式握手（apphs/1，規則第 3 版）：同一台電腦上的幾個程式互相說「我現在要做什麼、用了多少」，誰需要就讓誰先跑。
 
 這個檔是共用的：SortCut 和 FusionStitch 用的是同一份，**整個檔直接複製過去就能用**（只用 Python 標準函式庫、沒有 Qt）。
 完整規則看 HANDSHAKE_握手協定.md。
@@ -21,6 +21,13 @@
     兩邊都在做重工作時照這個比例分；任何一邊改，兩邊一起變（最後改的為準）。
   * 🧑‍💻 留給使用者：有人在用這台電腦（鍵盤／滑鼠 idle_min 分鐘內動過）時，兩邊合起來只用 100 − reserve %
     （預設留 40%：平分時 50/50 → 30/30）。
+
+規則第 3 版（三個程式：FusionStitch、SortCut、ComfyRemote；2026-11-21 使用者定的）：
+  * 一直留 reserve %（預設 10%）給使用者：大家合起來最多用 90%。
+  * FusionStitch 和 SortCut 都在忙 → 照 share 分（預設各 45%）；只有一個在忙 → 它用 90%。
+  * 👑 boss（預設 ComfyRemote）一說要效能（want ≥ 2）→ 它 boss_cap（80%），其他人都降到 others_cap（5%）。
+  * ✅ members：這台電腦有誰參與（使用者勾）；沒勾的程式就算有寫狀態檔也不算。None ＝ 大家都算。
+  * 回傳多了 level（1～10，給右上角 Lv 用：cap 的十分之一，不限＝10）。
 """
 import json
 import os
@@ -30,13 +37,17 @@ import time
 from pathlib import Path
 
 PROTO = 'apphs/1'
-RULES = 2              # 規則版本：改 decide 的規則就加 1（越大越新）
+RULES = 3              # 規則版本：改 decide 的規則就加 1（越大越新）
 EVERY = 2.0            # 幾秒寫一次
 STALE = 10.0           # 幾秒沒更新算不在
 LOSE_CPU = 20.0        # 讓路的那邊：重工作最多用整台 CPU 的 %
 SPLIT_CPU = 45.0       # （第 1 版用的平分上限；第 2 版改成看 policy）
 WANT_TXT = {0: '閒著', 1: '背景小工作', 2: '在做重工作', 3: '使用者在等'}
-POLICY_DEFAULT = {'share': {}, 'reserve': 40, 'idle_min': 3, 'reserve_on': True}
+APPS = ['FusionStitch', 'SortCut', 'ComfyRemote', 'TikLive']      # 勾選「這台電腦有誰參與」用的清單
+POLICY_RV = 3          # policy.json 的版本：舊版存的 reserve／idle 這類預設值換成第 3 版的
+POLICY_DEFAULT = {'share': {}, 'reserve': 10, 'idle_min': 3, 'reserve_on': True, 'reserve_when': 'always',
+                  'members': None, 'boss': ['ComfyRemote'], 'boss_cap': 80, 'others_cap': 5}
+_PKEYS = ('share', 'reserve', 'idle_min', 'reserve_on', 'reserve_when', 'members', 'boss', 'boss_cap', 'others_cap')
 
 
 def folder():
@@ -88,7 +99,9 @@ def policy():
     P = dict(POLICY_DEFAULT); P['share'] = {}
     try:
         d = json.loads((folder() / 'policy.json').read_text(encoding='utf-8'))
-        if isinstance(d, dict): P.update({k: v for k, v in d.items() if k in ('share', 'reserve', 'idle_min', 'reserve_on', 't', 'by')})
+        if isinstance(d, dict):
+            keep = _PKEYS + ('t', 'by', 'rv') if int(d.get('rv') or 0) >= POLICY_RV else ('share', 't', 'by')   # 舊版的預設值不要
+            P.update({k: v for k, v in d.items() if k in keep})
     except Exception: pass
     try: P['share'] = {str(k): max(5, min(95, float(v))) for k, v in dict(P.get('share') or {}).items()}
     except Exception: P['share'] = {}
@@ -97,18 +110,25 @@ def policy():
     try: P['idle_min'] = max(0.5, min(60, float(P.get('idle_min') or 3)))
     except Exception: P['idle_min'] = 3
     P['reserve_on'] = P.get('reserve_on') is not False
+    P['reserve_when'] = 'active' if P.get('reserve_when') == 'active' else 'always'
+    m = P.get('members'); P['members'] = [str(x) for x in m] if isinstance(m, list) else None
+    b = P.get('boss'); P['boss'] = [str(x) for x in b] if isinstance(b, list) else ['ComfyRemote']
+    try: P['boss_cap'] = max(10, min(95, float(P.get('boss_cap') or 80)))
+    except Exception: P['boss_cap'] = 80
+    try: P['others_cap'] = max(1, min(50, float(P.get('others_cap') if P.get('others_cap') is not None else 5)))
+    except Exception: P['others_cap'] = 5
     return P
 
 
 def set_policy(by='', **kw):
-    """改共用設定（兩邊都會照新的做）。例：set_policy('FusionStitch', share={'FusionStitch': 40, 'SortCut': 60})、
+    """改共用設定（大家都會照新的做）。members=['FusionStitch','SortCut'] ＝ 只有這兩個參與；members=None ＝ 大家都算。例：set_policy('FusionStitch', share={'FusionStitch': 40, 'SortCut': 60})、
     set_policy(by, reserve=40)、set_policy(by, reserve_on=False)。回傳新的設定."""
     P = policy()
-    for k in ('share', 'reserve', 'idle_min', 'reserve_on'):
-        if k in kw and kw[k] is not None:
+    for k in _PKEYS:
+        if k in kw and (kw[k] is not None or k == 'members'):
             if k == 'share': P['share'] = {**P.get('share', {}), **{str(a): float(v) for a, v in dict(kw[k]).items()}}
             else: P[k] = kw[k]
-    P['t'] = time.time(); P['by'] = str(by)
+    P['t'] = time.time(); P['by'] = str(by); P['rv'] = POLICY_RV
     p = folder() / 'policy.json'; tmp = p.with_suffix('.tmp')
     try: tmp.write_text(json.dumps(P, ensure_ascii=False), encoding='utf-8'); os.replace(tmp, p)
     except Exception: pass
@@ -138,39 +158,67 @@ def _brief(p):
             'use': p.get('use'), 'age': round(time.time() - float(p.get('t') or 0), 1), 'mode': p.get('mode'), 'rules': p.get('rules', 1)}
 
 
+def member(app, pol):
+    m = pol.get('members')
+    return m is None or str(app) in m
+
+
 def decide_with(me, P, pol=None, idle=None):
-    """規則本體（第 2 版）。me＝自己的狀態、P＝還在的別人（list）、pol＝policy()、idle＝idle_seconds().
-    回傳的欄位跟第 1 版一樣（舊程式照用），另外多 share／budget／user_active."""
+    """規則本體（第 3 版）。me＝自己的狀態、P＝還在的別人（list）、pol＝policy()、idle＝idle_seconds().
+    回傳的欄位跟第 1、2 版一樣（舊程式照用），另外有 share／budget／user_active／level／members."""
     pol = pol or policy()
     active = idle is not None and idle < float(pol.get('idle_min') or 3) * 60
-    budget = 100.0 - float(pol.get('reserve') or 0) if (active and pol.get('reserve_on', True)) else 100.0
+    use_res = pol.get('reserve_on', True) and (pol.get('reserve_when') == 'always' or active)
+    budget = 100.0 - float(pol.get('reserve') or 0) if use_res else 100.0
+    my = str(me.get('app') or '')
+    Q = [p for p in P if member(p.get('app'), pol)]
+    heavy = lambda x: int(x.get('want') or 0) >= 2
+    nm_ = lambda x: x.get('name') or x.get('app')
+    mx_nv = int((me.get('max') or {}).get('nvenc') or 8)
     base = {'cpu_cap': None, 'nvenc_cap': None, 'no_new_heavy': False, 'peers': [_brief(p) for p in P], 'rules': RULES,
-            'user_active': bool(active), 'budget': round(budget, 1), 'share': None}
-    if not me.get('on', True) or not P:
-        return {**base, 'mode': 'alone', 'peer': '', 'why': '沒有別的程式要讓' if me.get('on', True) else '握手關著'}
-    worst = None
-    for p in P:                                                                  # 有好幾個的話：照最嚴的那個
-        L = lead_of(me, p); w = int(p.get('want') or 0); mine = int(me.get('want') or 0)
-        if L is None: r = ('split', 1) if min(w, mine) >= 2 else ('alone', 0)       # 兩邊都在做重工作、優先一樣 → 照拉桿分
-        elif L is p: r = ('yield', 2) if w >= 2 else ('alone', 0)                  # 對方只在做背景小工作：不用讓
-        else: r = ('lead', 0) if w >= 1 else ('alone', 0)
-        if worst is None or r[1] > worst[0][1]: worst = (r, p)
-    (mode, _sev), p = worst; nm = p.get('name') or p.get('app'); w = int(p.get('want') or 0)
-    mx_nv = int((p.get('max') or {}).get('nvenc') or (me.get('max') or {}).get('nvenc') or 8)
-    p_nv = int((p.get('use') or {}).get('nvenc') or 0)
-    out = {**base, 'mode': mode, 'peer': nm, 'peer_want': w, 'peer_what': p.get('what', '')}
-    heavy_peers = [x for x in P if int(x.get('want') or 0) >= 2 and lead_of(me, x) is None]
-    if mode == 'yield':
-        out.update(cpu_cap=min(LOSE_CPU, budget), nvenc_cap=max(0, min(2, mx_nv - p_nv)), no_new_heavy=w >= 2,
-                   why=f'讓 {nm} 先跑（它{WANT_TXT.get(w, "")}' + (f'：{p.get("what")}' if p.get('what') else '') + '）')
-    elif mode == 'split':
-        sh = share_of(str(me.get('app')), heavy_peers or [p], pol); cap = budget * sh / 100.0
-        out.update(share=round(sh, 1), cpu_cap=round(cap, 1), nvenc_cap=max(1, int(round(mx_nv * sh / 100.0))),
-                   why=f'跟 {nm} 分：這邊 {sh:.0f}%' + (f'（有人在用電腦，留 {100 - budget:.0f}% 給你 → 這邊 {cap:.0f}%）' if budget < 100 else ''))
-    elif mode == 'lead':
-        out.update(why=f'這邊先跑，{nm} 讓路（它{WANT_TXT.get(w, "")}）')
-    else: out.update(why=f'{nm} 閒著，照常跑')
-    return out
+            'user_active': bool(active), 'budget': round(budget, 1), 'share': None, 'members': pol.get('members'), 'peer': ''}
+
+    def out(mode, cap, why, **kw):
+        d = {**base, 'mode': mode, 'why': why, **kw}
+        if cap is not None and cap < 99.9:
+            d['cpu_cap'] = round(cap, 1); d['nvenc_cap'] = max(1, int(round(mx_nv * cap / 100.0)))
+        d['level'] = 10 if d['cpu_cap'] is None else max(1, min(10, int(d['cpu_cap'] / 10.0 + 0.5)))
+        return d
+    if not me.get('on', True):
+        return out('alone', None, '握手關著')
+    if not member(my, pol):
+        return out('alone', None, '這台電腦沒勾這個程式參與，照常跑')
+    mine = heavy(me)
+    bosses = list(pol.get('boss') or [])
+    rest = 100.0 - budget
+    if my in bosses and mine:                                                     # 👑 這邊最優先
+        others = [p for p in Q if heavy(p) and str(p.get('app')) not in bosses]
+        b2 = [p for p in Q if heavy(p) and str(p.get('app')) in bosses]
+        cap = float(pol['boss_cap']) / (1 + len(b2))
+        return out('lead', cap, f'這邊最優先：用 {cap:.0f}%' + (f'，{"、".join(nm_(p) for p in others)} 先降到 {pol["others_cap"]:.0f}%' if others else ''),
+                   peer=nm_(others[0]) if others else '')
+    bp = [p for p in Q if heavy(p) and str(p.get('app')) in bosses]
+    if bp:                                                                        # 👑 別人最優先
+        oc = float(pol['others_cap'])
+        return out('yield', oc if mine else None, f'{nm_(bp[0])} 最優先（{pol["boss_cap"]:.0f}%），這邊先降到 {oc:.0f}%', peer=nm_(bp[0]),
+                   peer_want=int(bp[0].get('want') or 0), peer_what=bp[0].get('what', ''))
+    H = [p for p in Q if heavy(p)]
+    if not mine or not H:
+        why = '沒有別的程式在忙' if mine else '這邊沒在做重工作'
+        return out('alone', budget if mine else None, why + (f'（留 {rest:.0f}% 給你 → 最多 {budget:.0f}%）' if mine and rest > 0 else ''))
+    up = [p for p in H if lead_of(me, p) is p]
+    if up:                                                                        # 有人優先比這邊高
+        p = up[0]; w = int(p.get('want') or 0)
+        return out('yield', min(LOSE_CPU, budget), f'讓 {nm_(p)} 先跑（它{WANT_TXT.get(w, "")}' + (f'：{p.get("what")}' if p.get('what') else '') + '）',
+                   peer=nm_(p), peer_want=w, peer_what=p.get('what', ''), no_new_heavy=w >= 2)
+    tie = [p for p in H if lead_of(me, p) is None]
+    low = [p for p in H if lead_of(me, p) is me]
+    room = budget - LOSE_CPU * len(low)
+    if not tie:
+        return out('lead', room, f'這邊先跑，{"、".join(nm_(p) for p in low)} 讓路', peer=nm_(low[0]))
+    sh = share_of(my, tie, pol); cap = room * sh / 100.0
+    return out('split', cap, f'跟 {"、".join(nm_(p) for p in tie)} 分：這邊 {cap:.0f}%' + (f'（留 {rest:.0f}% 給你）' if rest > 0 else ''),
+               share=round(sh, 1), peer=nm_(tie[0]), peer_want=int(tie[0].get('want') or 0), peer_what=tie[0].get('what', ''))
 
 
 # ---------------------------------------------------------------- 🆙 誰新就用誰的規則

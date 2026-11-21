@@ -988,6 +988,9 @@ def handle(method: str, path: str, query: dict, body: dict, remote) -> tuple:
             if path == "/api/cloud":
                 import cloudupd
                 return J(cloudupd.status())
+            if path == "/api/hs":
+                import hsbridge
+                return J(hsbridge.status())
             if path == "/api/colortag":
                 import colortag
                 return J(colortag.status())

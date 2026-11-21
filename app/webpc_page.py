@@ -203,8 +203,15 @@ video{width:100%;border-radius:8px;background:#000;margin-top:6px}
 .calbody{overflow-y:auto;padding:0 10px 6px;flex:1;min-height:0}.dirit{padding:11px 6px;border-bottom:1px solid var(--line);cursor:pointer}
 .calft{display:flex;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}.calsel{flex:1;color:var(--text);font-weight:700;font-size:13px;word-break:break-all}
 .calclr{background:var(--btn);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 14px}.calok{background:var(--accent);border:0;color:#fff;border-radius:10px;padding:9px 18px;font-weight:800}
+.lvb{--lc:#2ecc71;display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px 0 8px;border-radius:13px;border:1px solid color-mix(in srgb,var(--lc) 55%,transparent);background:color-mix(in srgb,var(--lc) 12%,transparent);color:var(--lc);font:700 12px/1 system-ui;cursor:pointer;margin-right:8px}
+.lvb .lvbars{display:inline-flex;align-items:flex-end;gap:1.5px;height:16px}.lvb .lvbars i{width:3px;border-radius:1px;background:rgba(127,140,160,.35)}.lvb .lvbars i.on{background:var(--lc)}.lvb.off{--lc:#7f8a99}
+.lvm{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:12px}
+.lvm>div{background:#151a21;color:#e8edf3;border:1px solid #252c35;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:14px 16px;box-sizing:border-box}
+.lvm h3{margin:0 0 4px;font-size:16px}.lvm .lvbig{font-size:28px;font-weight:800}.lvm table{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0}
+.lvm td,.lvm th{padding:5px;border-bottom:1px solid rgba(127,140,160,.18);text-align:left}.lvm .lvmu{opacity:.7;font-size:12px;line-height:1.5}
+.lvm .lvrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0;font-size:13px}.lvm select{font:inherit;padding:3px 6px;border-radius:8px}.lvm .lvx{float:right;border:0;background:none;color:inherit;font-size:20px;cursor:pointer;opacity:.7}
 </style></head><body>
-<header><div class="bar"><div class="logo"><img src="/icon-192.png" alt="">FusionStitch<span class="pc" id="pcn">GoPro Fusion 360</span></div><button id="inst" class="inst" hidden>📲 安裝 App</button><div class="rt"><div id="clk" class="clk"></div><span class="ver" id="ver" title="程式版本">V</span></div></div>
+<header><div class="bar"><div class="logo"><img src="/icon-192.png" alt="">FusionStitch<span class="pc" id="pcn">GoPro Fusion 360</span></div><button id="inst" class="inst" hidden>📲 安裝 App</button><div class="rt"><button type="button" class="lvb" id="lvb" title="🤝 效能分配（跟 SortCut、ComfyRemote）：點一下看詳細"><span class="lvbars"><i style="height:5px"></i><i style="height:6px"></i><i style="height:7px"></i><i style="height:8px"></i><i style="height:9px"></i><i style="height:10px"></i><i style="height:11px"></i><i style="height:12px"></i><i style="height:13px"></i><i style="height:14px"></i></span><b>Lv–</b></button><div id="clk" class="clk"></div><span class="ver" id="ver" title="程式版本">V</span></div></div>
 <nav id="tabs"><button data-t="quick">★ 快速轉檔</button><button data-t="lib">素材庫</button><button data-t="queue">轉檔佇列<em id="nq" hidden></em></button><button data-t="outs">成品<em id="no" hidden></em></button><button data-t="tools" class="tset">工具</button><button data-t="set" class="tset">設定</button></nav></header>
 <main id="v"></main><div class="toast" id="toast"></div>
 <script>
@@ -426,13 +433,13 @@ document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.c
 function hsH(h){if(!h)return "";const M={alone:"照常跑",lead:"這邊先跑",yield:"讓對方先",split:"照分配"};const P=h.peers||[];const o=h.other||"SortCut";
   const who=P.length?P.map(p=>`${esc(p.name)} V${esc(p.ver)}（${esc(p.what||"閒著")}）`).join("、"):"沒看到 "+esc(o);
   const left=h.boost_until-Date.now()/1000;const sh=Math.round((h.share||50)/10);
-  return `<div class="pcbox"><div class="pchd"><b>🤝 跟 ${esc(o)} 握手</b><label style="display:flex;gap:6px;align-items:center;margin-left:auto"><input type="checkbox" id="hsOn" ${h.on?"checked":""}>開</label></div>
+  return `<div class="pcbox"><div class="pchd"><b>🤝 握手（SortCut、ComfyRemote）</b><label style="display:flex;gap:6px;align-items:center;margin-left:auto"><input type="checkbox" id="hsOn" ${h.on?"checked":""}>開</label></div>
 ${h.on?`<div class="snote" style="margin:2px 0 6px;${h.mode==="yield"||h.mode==="split"?"color:#ffb347":""}">${who}<br>${M[h.mode]||h.mode}：${esc(h.why||"")} · 規則第 ${h.rules} 版${h.rules_from==="lib"?"（對方的新版）":""}</div>
 <div class="pcs"><span>分配</span><input type="range" id="hsR" min="1" max="9" step="1" value="${sh}"><b id="hsV" data-o="${esc(o)}" style="white-space:nowrap">FusionStitch ${sh*10} : ${100-sh*10} ${esc(o)}</b></div>
-<div class="pcs"><label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="hsResOn" ${h.reserve_on?"checked":""}>我在用電腦時留</label><input type="range" id="hsRes" min="0" max="80" step="10" value="${h.reserve}"><b id="hsRV">${h.reserve}%</b></div>
+<div class="pcs"><label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="hsResOn" ${h.reserve_on?"checked":""}>留給你</label><input type="range" id="hsRes" min="0" max="80" step="10" value="${h.reserve}"><b id="hsRV">${h.reserve}%</b></div>
 <div class="pcs"><span>優先</span><select id="hsPr">${[0,1,2,3,4,5,6,7,8,9,10].map(v=>`<option${v===h.prio?" selected":""}>${v}</option>`).join("")}</select>
 ${left>0?`<button class="pill" data-hsb="0">取消先跑（剩 ${Math.ceil(left/60)} 分）</button>`:`<button class="pill" data-hsb="1">⏩ 這邊先跑 1 小時</button>`}</div>
-<div class="snote" style="margin:4px 0 0">兩邊都在轉檔時照分配；有人在用電腦（${h.idle_min} 分鐘內動過鍵盤滑鼠）時兩邊合起來只用 ${100-h.reserve}%。分配兩邊共用，哪邊拉都一樣。</div>`:`<div class="snote">關著：兩邊各跑各的</div>`}</div>`;}
+<div class="snote" style="margin:4px 0 0">Lv ${h.lv}。FusionStitch、SortCut 都在忙時照分配，大家合起來最多 ${100-h.reserve}%；${esc((h.boss||[]).join("、"))} 一送出就它 ${Math.round(h.boss_cap||80)}%、其他 ${Math.round(h.others_cap||5)}%。更多設定（誰參與）點右上角 Lv。</div>`:`<div class="snote">關著：兩邊各跑各的</div>`}</div>`;}
 function paceH(p){const M=[["full","🚀 全速"],["smart","🧠 智慧降速"],["manual","🐢 固定降速"]];
   return `<div class="pcbox"><div class="pchd"><b>⚡ 轉檔速度</b><span class="pcnow ${p.level<0.999?"slow":""}">${esc(p.label)}</span></div>
 <div class="pcm">${M.map(([k,t])=>`<button class="pill${p.mode===k?" on":""}" data-pmode="${k}">${t}</button>`).join("")}</div>
@@ -718,6 +725,37 @@ async function colorTag(dir){const p=$("#player");if(!p)return;
 async function ctWatch(){for(;;){await new Promise(r=>setTimeout(r,1000));let d;try{d=await J("/api/colortag");}catch(e){continue;}const el=$("#ctSt");if(!el)return;
   if(d.busy){el.textContent=`補標記中 ${d.done}/${d.total}：${d.cur}`;continue;}
   el.innerHTML=`✔ 完成：成功 ${d.ok.length} 支`+(d.fail.length?`，失敗 ${d.fail.length} 支<br>`+d.fail.map(esc).join("<br>"):"（重新上傳 YouTube 顏色就會正確）");const g=$("#ctGo");if(g)g.hidden=true;return;}}
+/* ================= 🤝 右上角 Lv 1～10（跟 SortCut、ComfyRemote 一樣的介面） ================= */
+let LVV=null;const LVCOL=l=>l>=8?"#2ecc71":l>=5?"#f1c40f":l>=3?"#ff9f43":"#ff6b6b";
+function lvSet(v){LVV=v;const el=$("#lvb");if(!el)return;const on=v.on!==false,l=v.lv||10;el.classList.toggle("off",!on);el.style.setProperty("--lc",LVCOL(l));
+  el.querySelector("b").textContent=on?"Lv"+l:"OFF";el.querySelectorAll(".lvbars i").forEach((x,i)=>x.classList.toggle("on",on&&i<l));const m=$("#lvm");if(m)lvBody(m.firstElementChild);}
+async function lvTick(){try{lvSet(await J("/api/hs"));}catch(e){}}
+function lvBody(box){const v=LVV||{};const P=v.peers||[];const W={0:"閒著",1:"背景小工作",2:"在做重工作",3:"使用者在等"};const M={alone:"照常跑",lead:"這邊先跑",yield:"讓別人先",split:"照分配"};
+  const mem=v.members;const isM=a=>mem==null||mem.includes(a);const sh=Math.round((v.share||50)/10);
+  const rows=(v.apps||[]).map(a=>{const p=a==="FusionStitch"?{name:"FusionStitch（這台）",want:null}:P.find(x=>x.app===a);
+    return `<tr><td><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-lvm="${esc(a)}" ${isM(a)?"checked":""}>${esc(a)}</label></td><td>${a==="FusionStitch"?`Lv ${v.lv} · ${esc(M[v.mode]||v.mode||"")}`:p?`V${esc(p.ver||"")} · ${esc(W[p.want||0]||"")}${p.what?"（"+esc(p.what)+"）":""}${p.rules<3?` <span style="color:#ff9f43">規則第 ${p.rules||1} 版，要更新</span>`:""}`:`<span class="lvmu">沒開／沒看到</span>`}</td></tr>`;}).join("");
+  const left=(v.boost_until||0)-Date.now()/1000;
+  box.innerHTML=`<button class="lvx" data-lvx="1">✕</button><h3>🤝 效能分配</h3><div><span class="lvbig" style="color:${LVCOL(v.lv||10)}">Lv ${v.lv??"–"}</span> <b>／10</b> <span class="lvmu">${v.cap!=null?`這邊最多用 ${Math.round(v.cap)}%（現在 ${Math.round((v.level||1)*100)}%）`:"不限"}</span></div>
+<div style="margin:4px 0">${esc(v.why||"")}</div>
+<div class="lvrow"><label><input type="checkbox" data-lvk="on" ${v.on?"checked":""}> 🤝 握手（跟這台電腦上的程式互相分配效能）</label></div>
+<b style="font-size:13px">✅ 這台電腦有誰參與（沒在這台跑的不要勾）</b><table>${rows}</table>
+<div class="lvrow"><span>⚖ FusionStitch : SortCut</span><input type="range" min="1" max="9" step="1" value="${sh}" data-lvk="share" style="flex:1;min-width:120px"><b data-lvsv>${sh*10} : ${100-sh*10}</b></div>
+<div class="lvrow"><label>🧑‍💻 留給你 <select data-lvk="reserve">${[0,5,10,15,20,30,40].map(x=>`<option ${x===Math.round(v.reserve||0)?"selected":""}>${x}</option>`).join("")}</select>%</label>
+ <label><select data-lvk="reserve_when"><option value="always" ${v.reserve_when==="always"?"selected":""}>一直留</option><option value="active" ${v.reserve_when==="active"?"selected":""}>有在用電腦時才留</option></select></label></div>
+<div class="lvrow"><label>👑 ${esc((v.boss||[]).join("、")||"—")} 要效能時用 <select data-lvk="boss_cap">${[50,60,70,80,85,90].map(x=>`<option ${x===Math.round(v.boss_cap||80)?"selected":""}>${x}</option>`).join("")}</select>%</label>
+ <label>其他降到 <select data-lvk="others_cap">${[1,3,5,10,15,20].map(x=>`<option ${x===Math.round(v.others_cap||5)?"selected":""}>${x}</option>`).join("")}</select>%</label></div>
+<div class="lvrow"><label>這邊的優先 <select data-lvk="prio">${[...Array(11)].map((_,i)=>`<option value="${i}" ${i===(v.prio??5)?"selected":""}>${i}${i===5?"（一樣）":i>5?"（這邊先）":"（對方先）"}</option>`).join("")}</select></label>
+ ${left>0?`<button class="pill" data-lvb="0">取消先跑（剩 ${Math.ceil(left/60)} 分）</button>`:`<button class="pill" data-lvb="1">⏩ 這邊先跑 1 小時</button>`}</div>
+<p class="lvmu">平常：FusionStitch 和 SortCut 都在忙 → 照分配（預設各 45%）；只有一個在忙 → 它用 ${100-(v.reserve||0)}%；${esc((v.boss||[]).join("、"))} 一送出 → 它 ${Math.round(v.boss_cap||80)}%、其他 ${Math.round(v.others_cap||5)}%。設定三個程式共用，哪邊改都一樣。規則第 ${v.rules} 版${v.rules_from==="lib"?"（別的程式提供的新版）":""}。${v.err?`<br><span style="color:#ff6b6b">${esc(v.err)}</span>`:""}</p>`;}
+function lvOpen(){let m=$("#lvm");if(m){m.remove();return;}m=document.createElement("div");m.className="lvm";m.id="lvm";m.innerHTML="<div></div>";document.body.appendChild(m);lvBody(m.firstElementChild);
+  m.addEventListener("click",async e=>{if(e.target===m||e.target.closest("[data-lvx]")){m.remove();return;}const b=e.target.closest("[data-lvb]");if(b){await act("/api/hs",{boost:+b.dataset.lvb});lvTick();}});
+  m.addEventListener("input",e=>{const t=e.target;if(t.dataset.lvk==="share"){const o=m.querySelector("[data-lvsv]");if(o)o.textContent=`${t.value*10} : ${100-t.value*10}`;}});
+  m.addEventListener("change",async e=>{const t=e.target;let body=null;
+    if(t.dataset.lvm!=null){const all=[...m.querySelectorAll("[data-lvm]")];body={members:all.filter(x=>x.checked).map(x=>x.dataset.lvm)};}
+    else if(t.dataset.lvk){const k=t.dataset.lvk;body={};body[k]=t.type==="checkbox"?t.checked:k==="share"?+t.value*10:k==="reserve_when"?t.value:+t.value;}
+    if(body){await act("/api/hs",body);lvTick();}});}
+document.addEventListener("click",e=>{if(e.target.closest&&e.target.closest("#lvb"))lvOpen();});
+lvTick();setInterval(lvTick,3000);
 /* ================= 工具 ================= */
 const TOOLS=[["轉檔",[["bg","🖥","後台狀態","現在在轉什麼、排隊什麼、中繼 SSD，可以取消"],["queue","☰","轉檔佇列","暫停、繼續、置頂、重試、全部轉完後關機"],["outs","▸","成品","播放、下載、重新轉檔"]]],
  ["顏色",[["cm","🎨","原廠色彩對標","用一支原廠轉好的影片，學 GoPro Fusion Studio 的顏色"]]],

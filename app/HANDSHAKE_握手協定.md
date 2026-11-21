@@ -1,3 +1,48 @@
+# 🤝 程式握手協定 apphs/1・規則第 3 版（FusionStitch ⇄ SortCut ⇄ ComfyRemote）
+
+> **給 SortCut 和 ComfyRemote 的 AI**（FusionStitch V2.21.0 帶來的；使用者 2026-11-21 定的規則）：
+> 三個程式用**同一份** `app_handshake.py`。請把這包裡的 `app/app_handshake.py` **整個檔原封不動覆蓋**到你的 app\ ——
+> **不要自己另外寫一份、也不要改裡面的規則**（三邊各寫各的會打架）。要改規則：改這份、`RULES` 加 1，再傳給另外兩邊；
+> 另外兩邊不更新也會自動照新規則（lib 資料夾機制，見下面 A）。
+
+## 使用者要的（第 3 版規則，已經寫在 decide_with() 裡）
+| 狀況 | FusionStitch | SortCut | ComfyRemote |
+|---|---|---|---|
+| FusionStitch、SortCut 都在忙 | 45% | 45% | — |
+| 只有一個在忙 | 90% | （或 90%） | — |
+| ComfyRemote 送出、要效能（want ≥ 2） | **5%** | **5%** | **80%** |
+| 一直留給使用者 | 10% | | |
+
+- `policy.json` 新欄位：`reserve`（10）、`reserve_when`（`always` 一直留／`active` 有在用電腦才留）、`boss`（`["ComfyRemote"]`）、`boss_cap`（80）、`others_cap`（5）、
+  `members`（✅ 這台電腦有誰參與：`["FusionStitch","SortCut","ComfyRemote"]`；`null`＝都算；沒勾的程式就算開著也不算）、`share`（FusionStitch : SortCut，預設 50 : 50 → 各 45%）、`rv: 3`。
+- 改設定：`app_handshake.set_policy('SortCut', members=[...])`、`set_policy(by, reserve=10)`、`set_policy(by, boss_cap=80, others_cap=5)`……三個程式共用一份，誰改都一樣。
+- 勾選清單用 `app_handshake.APPS`（FusionStitch、SortCut、ComfyRemote、TikLive）。TikLive 不講這個協定也可以勾著（沒看到就不算）。
+- `decide()` 回傳多了 **`level`（1～10）**＝右上角 Lv：`cpu_cap` 的十分之一（四捨五入），不限＝10。
+
+## 各程式要做的
+### 共同
+1. 覆蓋 `app/app_handshake.py`（這包的，`RULES = 3`）。
+2. `Handshake(app, name, ver, port, state).start()`；app 名稱一定要用：`FusionStitch`、`SortCut`、`ComfyRemote`。
+3. `state()` 回傳 `want`：0 閒著／1 背景小工作／2 在做重工作（**有排隊的也算 2**）／3 使用者按了「這邊先跑」。
+4. 照 `decide()` 的 `cpu_cap`（整台電腦的 %）限制自己的重工作、`no_new_heavy` 時新的重工作先不開。降：馬上；升：慢慢升（FusionStitch：每 10 秒 +10%）。
+5. **右上角 Lv 1～10**（手機 App 頁面；照 SortCut 現在那顆 `.lvb` 的樣子：10 根長條＋「Lv N」）：點進去是同一個面板——
+   目前 Lv 和原因、✅「這台電腦有誰參與」勾選（APPS 每個一列，旁邊寫它現在在做什麼／沒看到）、⚖ FusionStitch : SortCut 拉桿、
+   🧑‍💻 留給你 %（一直留／有在用電腦才留）、👑 ComfyRemote 要效能時用 % ／其他降到 %、這邊的優先、⏩ 這邊先跑。
+   全部讀 `policy()`／寫 `set_policy()`，三個程式畫面上的值都一樣。
+### SortCut
+- 原本「讓路給 TikLive」的 Lv 照舊；握手算出來的 `level` 再跟它取小的。握手區加上 ✅ 參與勾選。
+### ComfyRemote
+- 新增握手（port 用 brand.json 的 8761）。有 ComfyUI 工作送出／在跑／排隊 → `want = 2`；沒事 → 0。
+- 它是 👑（boss）：`decide()` 會給它 `mode='lead'`、`cpu_cap=80`，其他程式自己降到 5%。ComfyRemote 本身不用限制 ComfyUI。
+
+### FusionStitch 這邊（V2.21.0）怎麼做的
+- `FusionStitch.json`，port 8361。want：轉檔在跑或排隊＝2；只有中繼複製／補色彩標記＝1；沒事＝0；⏩ 這邊先跑＝3。
+- `cpu_cap` → 整條轉檔照比例休息（cap 45 ≈ 45% 的速度、5 ≈ 幾乎停住但不中斷）。手機右上角 Lv、電腦在轉檔佇列的「🤝 握手」那行。
+
+---
+
+（以下是第 2 版、第 1 版的說明，A／B 機制仍然有效）
+
 # 🤝 程式握手協定 apphs/1・規則第 2 版（SortCut ⇄ FusionStitch）
 
 > **給 SortCut 的 AI（第 2 版，FusionStitch V2.20.0 帶來的）**：FusionStitch 已經照第 1 版接好，並把共用的
