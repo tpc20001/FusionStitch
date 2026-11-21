@@ -354,7 +354,11 @@ def queue_state() -> dict:
         aft = outcheck.after_status()
     except Exception:
         aft = None
-    return {"pace": pst, "hs": hst, "after": aft, "relay_use": ru, "batches": bs["batches"], "drives": bs["drives"], "jobs": jobs_, "after": core.cfg("after_queue") or "none", "relay": relay,
+    try:
+        afin = all_finish(list(q.jobs) if q else [])
+    except Exception:
+        afin = None
+    return {"pace": pst, "hs": hst, "after": aft, "all_finish": afin, "relay_use": ru, "batches": bs["batches"], "drives": bs["drives"], "jobs": jobs_, "after": core.cfg("after_queue") or "none", "relay": relay,
             "cache_dir": core.cfg("cache_dir") or "", "cache_dir2": core.cfg("cache_dir2") or "",
             "dest": core.cfg("out_folder") if core.cfg("out_folder_mode") == "custom" else ""}
 
@@ -873,7 +877,7 @@ def quick_state() -> dict:
               "finish": sched.get(j.id), "eta_ready": bool(getattr(j, "eta_at", None))} for j in act]
     ad = quick_page.advice(folder)
     clips_ = [c for c in lib["clips"] if c["kind"] == "video"]
-    extra = clip_extras([c["id"] for c in clips_], lib.get("preset"))
+    extra = clip_extras([c["id"] for c in clips_], lib.get("preset"), ad.get("out") or "")
     for c in clips_:
         c.update(extra["clips"].get(c["id"], {}))
     try:
@@ -886,15 +890,37 @@ def quick_state() -> dict:
             "recent": folders.recent(), "clips": clips_,
             "preset": lib.get("preset"), "presets": lib.get("presets", []),
             "out_mode": core.cfg("out_folder_mode") or "beside", "out": ad["out"], "out_fixed": core.cfg("out_folder") or "",
-            "tip": ad["tip"], "level": ad["level"], "relay_on": ad["relay_on"], "relay": ad["relay"], "jobs": jobs_}
+            "tip": ad["tip"], "level": ad["level"], "relay_on": ad["relay_on"], "relay": ad["relay"], "jobs": jobs_,
+            "all_finish": all_finish(act)}
 
 
-def clip_extras(ids: list, preset: str | None) -> dict:
-    """Per clip: picture state, problem, original size and expected output size."""
+def all_finish(act) -> dict | None:
+    """⏱ 預計幾點全部完成（在跑＋排隊；暫停的不算）."""
+    import history
+    js = [j for j in act if j.status in ("running", "queued")]
+    if not js:
+        return None
+    sch = history.schedule(js)
+    ts = [t for t in sch.values() if t]
+    if not ts:
+        return None
+    return {"at": max(ts), "n": len(js), "partial": len(ts) < len(js)}
+
+
+def clip_extras(ids: list, preset: str | None, out_dir: str | None = None) -> dict:
+    """Per clip: picture state, problem, original size, expected output size and ✓ converted before."""
+    import donemark
     import framepair
     import history
     import problems
     w = _win()
+    if out_dir is None:
+        try:
+            import quick_page
+            out_dir = quick_page.advice(w.folder)["out"] if w and w.folder else ""
+        except Exception:
+            out_dir = ""
+    dfs = donemark.folders_for(out_dir or "")
     allc = (w.clips or {}) if w else {}
     rows, items = {}, []
     for cid in ids:
@@ -907,6 +933,10 @@ def clip_extras(ids: list, preset: str | None) -> dict:
         pr = problems.check(c, meta)
         src = history.source_bytes(c)
         rows[cid] = {"pair": framepair.state(cc), "problem": pr, "src": src}
+        try:
+            rows[cid]["done"] = donemark.find(c, meta, src, dfs)
+        except Exception:
+            rows[cid]["done"] = None
         fb = 0.0
         try:
             import jobs

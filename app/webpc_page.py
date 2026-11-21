@@ -303,19 +303,22 @@ function qkBig(src){let o=document.getElementById("qkBigO");if(!o){o=document.cr
 async function viewQuick(){$("#clk").textContent="";const host=V();if(!S.qk)host.innerHTML='<div class="empty">讀取中…</div>';
   let d;try{d=await J("/api/quick");}catch(e){if(!S.qk)host.innerHTML=offline;later(viewQuick,6000);return;}
   if(location.hash&&location.hash!=="#quick")return;
-  const sig=JSON.stringify([d.folder,d.dirs,d.recent,d.clips.map(c=>[c.id,c.status,c.duration,c.time,c.problem?c.problem.cat:"",Math.round((c.est||0)/1e8)]),d.est_basis,d.out_drive?Math.round(d.out_drive.free/1e9):0,d.out,d.out_mode,d.tip,d.relay,d.relay_on,d.preset]);
+  const sig=JSON.stringify([d.folder,d.dirs,d.recent,d.clips.map(c=>[c.id,c.status,c.duration,c.time,c.problem?c.problem.cat:"",Math.round((c.est||0)/1e8),c.done?1:0]),d.est_basis,d.out_drive?Math.round(d.out_drive.free/1e9):0,d.out,d.out_mode,d.tip,d.relay,d.relay_on,d.preset]);
   const same=S.qk&&S.qkSig===sig&&document.getElementById("qkJobs");S.qk=d;S.qkSig=sig;
-  if(QSEL===null||QSEL.folder!==d.folder){QSEL={folder:d.folder,ids:new Set(d.clips.filter(c=>c.status===""&&c.complete&&!c.problem).map(c=>c.id)),touched:false};}
-  else if(!QSEL.touched){d.clips.forEach(c=>{if(c.status===""&&c.complete&&!c.problem)QSEL.ids.add(c.id);});}
+  if(QSEL===null||QSEL.folder!==d.folder){QSEL={folder:d.folder,ids:new Set(d.clips.filter(c=>c.status===""&&!c.done&&c.complete&&!c.problem).map(c=>c.id)),touched:false};}
+  else if(!QSEL.touched){d.clips.forEach(c=>{if(c.status===""&&!c.done&&c.complete&&!c.problem)QSEL.ids.add(c.id);});}
   d.clips.forEach(c=>{if(c.problem)QSEL.ids.delete(c.id);});
-  const good=d.clips.filter(c=>!c.problem),probs=d.clips.filter(c=>c.problem);
+  const good0=d.clips.filter(c=>!c.problem),probs=d.clips.filter(c=>c.problem);const nDone=good0.filter(c=>c.done||c.status==="已轉檔").length;
+  let QHIDE=false;try{QHIDE=localStorage.getItem("fsQHide")==="1";}catch(e){}
+  const good=QHIDE?good0.filter(c=>!(c.done||c.status==="已轉檔")):good0;
   const nm=x=>esc(x.split(/[\\/]/).filter(Boolean).pop()||x);
-  const st=c=>c.status||(c.complete?"未轉檔":"不完整");
+  const st=c=>c.status||(c.done?"✓ 已轉過":(c.complete?"未轉檔":"不完整"));
   const sel=good.filter(c=>QSEL.ids.has(c.id)).length;
   const jobs=d.jobs.map(j=>{const fin=j.finish?`預計 ${fmtClk(j.finish)} 完成`:"";const p=(j.progress*100);
     return `<div class="qkJ"><div class="qkJt"><b>${esc(j.title)}</b><em class="${j.status==="running"?"ok":""}">${j.status==="running"?(j.eta_ready?fin+"（剩 "+fd(j.finish-Date.now()/1000)+"）":"準備中…"):(j.status==="queued"?"排隊中 "+fin:"已暫停")}</em></div>
     ${j.status==="running"?`<i class="qkP"><u style="width:${p.toFixed(1)}%"></u></i><small>${p.toFixed(1)}% · ${j.fps.toFixed(1)} 格/秒 · ${esc(j.detail)}</small>`:`<small>${esc(j.name)}</small>`}</div>`;}).join("");
-  if(same){document.getElementById("qkJobs").innerHTML=jobs||'<div class="qkTip info">目前沒有轉檔工作</div>';later(viewQuick,3000);return;}
+  const fin=d.all_finish?`<div class="qkTip ok" style="margin:0 0 6px">⏱ 預計 ${fmtClk(d.all_finish.at)} 全部完成（${d.all_finish.n} 支）</div>`:"";
+  if(same){document.getElementById("qkJobs").innerHTML=fin+(jobs||'<div class="qkTip info">目前沒有轉檔工作</div>');later(viewQuick,3000);return;}
   host.innerHTML=`<style>.qk{padding:10px 12px 90px;max-width:760px;margin:auto}.qkC{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}
 .qkH{color:#4dc9ff;font-weight:900;margin-bottom:6px}.qkPath{font-weight:800;color:var(--strong);word-break:break-all;margin:4px 0 8px}
 .qkRow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.qkRow button,.qkRow select{background:var(--btn);border:1px solid var(--line2);color:var(--text);border-radius:10px;padding:8px 12px;font:inherit}
@@ -337,7 +340,7 @@ async function viewQuick(){$("#clk").textContent="";const host=V();if(!S.qk)host
 <div class="qkRow">${d.parent!=null&&d.folder?`<button data-up="${esc(d.parent)}">⬆ 上一層</button>`:""}<button id="qkPick">選擇其他資料夾…</button>
 ${d.recent.length?`<select id="qkRec"><option value="">最近用過…</option>${d.recent.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select>`:""}</div>
 ${d.dirs.length?`<div style="margin-top:8px">${d.dirs.map(x=>`<div class="qkD" data-go="${esc(x)}">📁 ${nm(x)}</div>`).join("")}</div>`:""}</div>
-<div class="qkC"><div class="qkH">② 影片（${good.length}）</div>${good.length?good.map(c=>`<label class="qkCl"><input type="checkbox" data-id="${esc(c.id)}"${QSEL.ids.has(c.id)?" checked":""}${c.complete?"":" disabled"}><b>${esc(c.name)}</b>${qkImg(c)}<small>${esc(c.time||"")} · ${fd(c.duration)} · ${fmtB(c.size)}${c.est?` → 約 ${fmtB(c.est)}`:""} · ${esc(st(c))}</small><button class="qkMv" data-pm="${esc(c.id)}" title="移到問題檔案（先不轉）">⚠</button></label>`).join(""):'<div class="qkTip info">這裡沒有 GoPro Fusion 影片，請選放素材的資料夾</div>'}</div>
+<div class="qkC"><div class="qkH" style="display:flex;align-items:center;gap:8px">② 影片（${good.length}${QHIDE&&nDone?`，藏了 ${nDone} 支已轉過`:""}）${nDone?`<label style="margin-left:auto;font-weight:400;font-size:13px;color:var(--sub);display:flex;gap:6px;align-items:center"><input type="checkbox" id="qkHide" ${QHIDE?"checked":""}>只看沒轉過的</label>`:""}</div>${good.length?good.map(c=>`<label class="qkCl"><input type="checkbox" data-id="${esc(c.id)}"${QSEL.ids.has(c.id)?" checked":""}${c.complete?"":" disabled"}><b>${esc(c.name)}</b>${qkImg(c)}<small>${esc(c.time||"")} · ${fd(c.duration)} · ${fmtB(c.size)}${c.est?` → 約 ${fmtB(c.est)}`:""} · ${c.done&&!c.status?`<span style="color:#45d483" title="${esc(c.done.how+"："+c.done.path)}">✓ 已轉過</span>`:esc(st(c))}</small><button class="qkMv" data-pm="${esc(c.id)}" title="移到問題檔案（先不轉）">⚠</button></label>`).join(""):'<div class="qkTip info">這裡沒有 GoPro Fusion 影片，請選放素材的資料夾</div>'}</div>
 ${probs.length?`<div class="qkC qkPb"><div class="qkH" style="color:#ffb347">⚠ 問題檔案（${probs.length}）</div><div class="qkTip info">這些先不轉。原始檔案沒有被移動，只是集中在這裡，之後再分析。</div>${qkCats(probs).map(([lab,cs])=>`<div class="qkCatH">${esc(lab)}（${cs.length}）</div>`+cs.map(c=>`<div class="qkCl"><span class="qkWarn">⚠</span><b>${esc(c.name)}</b>${c.pair==="ok"?qkImg(c):""}<small>${esc(c.problem.detail||"")}<br>${esc(c.time||"")} · ${fd(c.duration)} · ${fmtB(c.size)}</small><span class="qkPbB"><button data-pc="${esc(c.id)}">重新讀取</button><button data-pr="${esc(c.id)}">移回清單</button></span></div>`).join("")).join("")}</div>`:""}
 <div class="qkC"><div class="qkH">③ 轉好的影片放在</div>
 <div class="qkRow"><select id="qkMode"><option value="beside"${d.out_mode!=="custom"?" selected":""}>素材資料夾裡的 stitched</option><option value="custom"${d.out_mode==="custom"?" selected":""}>固定的資料夾</option></select>${d.out_mode==="custom"?'<button id="qkOut">選擇…</button>':""}</div>
@@ -345,7 +348,7 @@ ${probs.length?`<div class="qkC qkPb"><div class="qkH" style="color:#ffb347">⚠
 <div class="qkRow" style="margin-top:8px"><button id="qkSsd" style="${d.relay_on?"background:#1d5c3a;color:#fff;border:0;font-weight:800":""}">SSD 加速：${d.relay_on?"開":"關"}</button><span class="qkTip info">${esc(d.relay)}</span></div>
 <div class="qkRow" style="margin-top:8px"><span class="qkTip info">輸出格式</span><select id="qkPre">${d.presets.map(p=>`<option value="${esc(p.key)}"${p.key===d.preset?" selected":""}>${esc(p.label)}</option>`).join("")}</select></div>
 <div id="qkEst">${qkEst(d)}</div><button class="qkGo" id="qkGo"${sel?"":" disabled"}>開始轉檔${sel?`（${sel} 個）`:""}</button></div>
-<div class="qkC"><div class="qkH">④ 轉檔中</div><div id="qkJobs">${jobs||'<div class="qkTip info">目前沒有轉檔工作</div>'}</div></div></div>`;
+<div class="qkC"><div class="qkH">④ 轉檔中</div><div id="qkJobs">${fin}${jobs||'<div class="qkTip info">目前沒有轉檔工作</div>'}</div></div></div>`;
   const open=async p=>{await act("/api/quick/open",{path:p});S.qk=null;S.qkSig="";QSEL=null;setTimeout(viewQuick,700);};
   host.onclick=async e=>{const t=e.target;const g=t.closest("[data-go]");if(g){open(g.dataset.go);return;}const u=t.closest("[data-up]");if(u){open(u.dataset.up);return;}
     if(t.id==="qkPick"){pickDir("選擇素材資料夾",d.folder,p=>open(p));return;}
@@ -433,6 +436,8 @@ document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.c
 function aftH(a){if(!a)return "";const cd=a.countdown!=null;
   return `<div class="pcbox"${cd?' style="border-color:#ff6b6b"':""}><div class="pchd"><b>🧪 全部轉完後</b><select id="aftSel" style="margin-left:auto">${[["none","不動作"],["sleep","睡眠"],["shutdown","關機"]].map(([k,t])=>`<option value="${k}" ${a.mode===k?"selected":""}>${t}</option>`).join("")}</select></div>
 ${cd?`<div style="color:#ff6b6b;font-weight:700;margin:6px 0">⏳ ${a.countdown} 秒後${esc(a.txt)}　<button class="pill" data-aftx="1">取消</button></div>`:`<div class="snote">${a.mode==="none"?"佇列做完不會怎樣":`還剩 ${a.left} 支，全部做完會倒數 60 秒再${esc(a.txt)}（做一次就回到不動作）`}</div>`}</div>`;}
+document.addEventListener("change",e=>{if(e.target&&e.target.id==="qkHide"){try{localStorage.setItem("fsQHide",e.target.checked?"1":"0");}catch(x){}S.qkSig=null;viewQuick();}});
+function finH(f){if(!f)return "";return `<div class="pcbox" style="padding:8px 12px"><b>⏱ 預計 ${fmtClk(f.at)} 全部完成</b> <span class="snote">（剩 ${fd(f.at-Date.now()/1000)}、${f.n} 支${f.partial?"，有幾支還沒有預估":""}）</span></div>`;}
 document.addEventListener("change",async e=>{if(e.target&&e.target.id==="aftSel"){await act("/api/after",{mode:e.target.value});viewQueue();}});
 document.addEventListener("click",async e=>{if(e.target.closest&&e.target.closest("[data-aftx]")){await act("/api/after",{cancel:true});viewQueue();}});
 function hsH(h){if(!h)return "";const M={alone:"照常跑",lead:"這邊先跑",yield:"讓對方先",split:"照分配"};const P=h.peers||[];const o=h.other||"SortCut";
@@ -486,7 +491,7 @@ async function viewQueue(){const host=V();if(!S.q)host.innerHTML='<div class="em
 <div class="tools" style="margin-top:6px"><span class="snote" style="margin:0;flex:none">全部轉完後</span><div class="seg" id="qafter">${A.map(([k,t])=>`<button data-k="${k}"${k===d.after?' class="on"':""}>${t}</button>`).join("")}</div></div>
 <div class="snote">${run?`▶ #${run.id} ${esc(run.title)} ${(run.progress*100).toFixed(1)}% · ${run.fps.toFixed(1)} fps · 剩 ${fd(run.eta)}`:"閒置"} · 排隊 ${d.jobs.filter(j=>j.status==="queued").length}</div></div>
 <div class="panel">
-${d.pace?paceH(d.pace):""}${hsH(d.hs)}${aftH(d.after)}<div class="r2"><span>💽 中繼 SSD</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir||"不使用")}</b><button class="pill" id="pc" style="flex:none">選擇…</button>${d.cache_dir?'<button class="pill" id="pcx" style="flex:none">不使用</button>':""}</div>
+${finH(d.all_finish)}${d.pace?paceH(d.pace):""}${hsH(d.hs)}${aftH(d.after)}<div class="r2"><span>💽 中繼 SSD</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir||"不使用")}</b><button class="pill" id="pc" style="flex:none">選擇…</button>${d.cache_dir?'<button class="pill" id="pcx" style="flex:none">不使用</button>':""}</div>
 ${d.cache_dir?`<div class="r2" style="margin-top:6px"><span>💽 中繼 2（備援）</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir2||"不使用")}</b><button class="pill" id="pc2" style="flex:none">選擇…</button>${d.cache_dir2?'<button class="pill" id="pc2x" style="flex:none">不使用</button>':""}</div>`:""}
 <div class="r2" style="margin-top:6px"><span>📦 成品送到</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.dest||"素材資料夾裡的 stitched")}</b><button class="pill" id="pd" style="flex:none">選擇…</button>${d.dest?'<button class="pill" id="pdx" style="flex:none">回預設</button>':""}</div>
 ${d.relay_use?`<div class="snote">📥 中繼已先存素材：${(d.relay_use.roots||[{drive:"",used:d.relay_use.used,cap:d.relay_use.cap,main:true}]).map(x=>`${esc(x.drive)}${x.main?"（主要）":"（備援）"} ${fmtB(x.used)}${x.cap?" / "+fmtB(x.cap):""}`).join("　")}（正在轉的和下一支一定先存，其他滿了就等）</div>`:""}${d.relay?`<div class="snote">${esc(d.relay)}</div>`:""}</div>`;

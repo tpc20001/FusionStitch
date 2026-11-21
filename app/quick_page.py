@@ -337,6 +337,9 @@ class QuickPage(QWidget):
                 st = self.main.library.clip_status(c)
             except Exception:
                 st = ""
+            dn = (self._extra["clips"].get(c["id"]) or {}).get("done")
+            if not st and dn:
+                st = "✓ 已轉過"
             chk = QTableWidgetItem()
             chk.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
             pr = self._probs.get(c["id"])
@@ -360,7 +363,9 @@ class QuickPage(QWidget):
                 self.table.item(r, 1).setForeground(QColor("#ffb347"))
             else:
                 si = QTableWidgetItem(st or ("未轉檔" if c["complete"] else "檔案不完整"))
-                si.setForeground(Qt.green if st == "已轉檔" else (Qt.yellow if st else Qt.white))
+                if dn and st == "✓ 已轉過":
+                    si.setToolTip(f"以前轉過（{dn['how']}）：{dn['path']}\n預設不勾；要再轉一次就自己勾")
+                si.setForeground(Qt.green if st in ("已轉檔", "✓ 已轉過") else (Qt.yellow if st else Qt.white))
             self.table.setItem(r, 4, si)
         self.table.blockSignals(False)
         self._pairs(request=True)
