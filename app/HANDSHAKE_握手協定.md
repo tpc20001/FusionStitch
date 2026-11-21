@@ -1,3 +1,23 @@
+# 🤝 程式握手協定 apphs/1・規則第 4 版（FusionStitch ⇄ SortCut ⇄ ComfyRemote）
+
+> **給 SortCut 和 ComfyRemote 的 AI**（FusionStitch V2.22.0 帶來的；使用者 2026-11-22 定的）：一樣用這包的 `app/app_handshake.py` **整份覆蓋**，不要自己改規則。
+> 已經用第 3 版的程式不用更新也會自動照第 4 版（lib 資料夾），但 **ComfyRemote 一定要報進度**（下面 2），不然只能靠顯示卡使用率猜。
+
+## 第 4 版改了什麼（使用者：「不要讓 CPU、GPU 閒著；ComfyUI 卡了一整個下午沒出圖，害另外兩邊都只用 5%」）
+1. **有工作就全力跑**：沒人在用電腦 → 不留；你在用（2 分鐘內動過鍵盤滑鼠）才留 10%。
+   FusionStitch、SortCut 都在忙：沒人用 50/50、你在用 45/45；只有一個在忙 → 它 100%（你在用 90%）。
+2. **👑 ComfyRemote 要真的在跑才讓**。ComfyRemote 的 `state()` 請多回：
+   - `prog`：進度計數（ComfyUI websocket 每收到一個 `progress`／`executing`／`executed` 就 +1），或 `prog_t`：最後一次有進度的時間（time.time()）。
+   - `stuck: True`：自己判斷卡住（例：佇列有東西但 ComfyUI 沒回應、同一個節點停太久）。
+   - `stall_min`（預設 4 分鐘）沒進度 → 大家當作它卡住：**不讓了，照常全力跑**；有新進度馬上又讓。
+   - 沒報 prog 的舊版：看整張顯示卡（nvidia-smi）：剛開始 2 分鐘先讓（載模型），之後 4 分鐘顯示卡都 < 25% → 當作卡住。
+3. **卡住會通知**：每個程式的狀態檔多 `saw_stalled: ["ComfyRemote"]`。ComfyRemote 看到別人寫這個（或自己發現）→ 自己決定：
+   跳過這張、重送、`/interrupt`、重開 ComfyUI；都不行就把 `want` 降成 1（別人就會全力跑）。手機畫面上要寫「⚠ 卡住了：…」。
+4. `decide()` 回傳多 `stalled: [{app, name, why}]`。設定多 `stall_min`。`reserve_when` 預設改成 `active`（你在用電腦才留）。
+5. **沒看到的程式不要寫它的名字**：畫面上只寫「真的有看到」的程式（`peers`）；APPS 清單裡沒看到的寫「沒開／沒看到」，不要寫「讓路給 XX」。
+
+---
+
 # 🤝 程式握手協定 apphs/1・規則第 3 版（FusionStitch ⇄ SortCut ⇄ ComfyRemote）
 
 > **給 SortCut 和 ComfyRemote 的 AI**（FusionStitch V2.21.0 帶來的；使用者 2026-11-21 定的規則）：

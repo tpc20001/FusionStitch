@@ -2493,7 +2493,7 @@ class QueuePage(QWidget):
         hr.addWidget(self.hs_share)
         self._hs_other = "SortCut"
         self.hs_share_lab = QLabel(""); self.hs_share_lab.setFixedWidth(180); hr.addWidget(self.hs_share_lab)
-        self.hs_res_on = QCheckBox("留給你"); self.hs_res_on.setToolTip("大家合起來只用剩下的（預設一直留 10%：FusionStitch、SortCut 各 45%）。手機右上角 Lv 可以改成「有在用電腦時才留」")
+        self.hs_res_on = QCheckBox("留給你"); self.hs_res_on.setToolTip("你在用電腦（2 分鐘內動過鍵盤滑鼠）時，大家合起來只用剩下的（預設留 10%：FusionStitch、SortCut 各 45%）；沒人用 → 全力跑")
         self.hs_res_on.toggled.connect(lambda v: self._hs_act(reserve_on=bool(v))); hr.addWidget(self.hs_res_on)
         self.hs_res = QSpinBox(); self.hs_res.setRange(0, 80); self.hs_res.setSingleStep(10); self.hs_res.setSuffix("%")
         self.hs_res.editingFinished.connect(lambda: self._hs_act(reserve=self.hs_res.value())); hr.addWidget(self.hs_res)

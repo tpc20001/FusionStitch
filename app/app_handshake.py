@@ -28,6 +28,14 @@
   * 👑 boss（預設 ComfyRemote）一說要效能（want ≥ 2）→ 它 boss_cap（80%），其他人都降到 others_cap（5%）。
   * ✅ members：這台電腦有誰參與（使用者勾）；沒勾的程式就算有寫狀態檔也不算。None ＝ 大家都算。
   * 回傳多了 level（1～10，給右上角 Lv 用：cap 的十分之一，不限＝10）。
+
+規則第 4 版（2026-11-22 使用者：「不要讓 CPU、GPU 閒著」）：
+  * 有工作就全力跑：沒人在用電腦 → 不留（100%）；有人在用（idle_min 2 分鐘內動過鍵盤滑鼠）才留 reserve %（10%）。
+    FusionStitch、SortCut 都在忙：沒人用 50/50、有人用 45/45；只有一個在忙 → 它 100%（有人用 90%）。
+  * 👑 ComfyRemote 要「真的在跑」才讓：它的狀態檔有 prog（進度計數，每完成一步／一張就 +1）或 prog_t（最後有進度的時間）、
+    或 stuck=true（自己說卡住了）。stall_min（4）分鐘沒有進度 → 當作卡住：大家不讓了，照常全力跑；
+    它沒報進度的話，看整張顯示卡的使用率（nvidia-smi）：剛開始 2 分鐘先讓（載模型），之後 stall_min 分鐘顯示卡都 < 25% → 當作卡住。
+    卡住的會寫進每個程式狀態檔的 saw_stalled（ComfyRemote 看到可以自己決定：跳過、重送、重開 ComfyUI）。
 """
 import json
 import os
@@ -37,17 +45,17 @@ import time
 from pathlib import Path
 
 PROTO = 'apphs/1'
-RULES = 3              # 規則版本：改 decide 的規則就加 1（越大越新）
+RULES = 4              # 規則版本：改 decide 的規則就加 1（越大越新）
 EVERY = 2.0            # 幾秒寫一次
 STALE = 10.0           # 幾秒沒更新算不在
 LOSE_CPU = 20.0        # 讓路的那邊：重工作最多用整台 CPU 的 %
 SPLIT_CPU = 45.0       # （第 1 版用的平分上限；第 2 版改成看 policy）
 WANT_TXT = {0: '閒著', 1: '背景小工作', 2: '在做重工作', 3: '使用者在等'}
 APPS = ['FusionStitch', 'SortCut', 'ComfyRemote', 'TikLive']      # 勾選「這台電腦有誰參與」用的清單
-POLICY_RV = 3          # policy.json 的版本：舊版存的 reserve／idle 這類預設值換成第 3 版的
-POLICY_DEFAULT = {'share': {}, 'reserve': 10, 'idle_min': 3, 'reserve_on': True, 'reserve_when': 'always',
+POLICY_RV = 4          # policy.json 的版本：舊版存的 reserve／idle 這類預設值換成第 3 版的
+POLICY_DEFAULT = {'share': {}, 'reserve': 10, 'idle_min': 2, 'reserve_on': True, 'reserve_when': 'active', 'stall_min': 4,
                   'members': None, 'boss': ['ComfyRemote'], 'boss_cap': 80, 'others_cap': 5}
-_PKEYS = ('share', 'reserve', 'idle_min', 'reserve_on', 'reserve_when', 'members', 'boss', 'boss_cap', 'others_cap')
+_PKEYS = ('share', 'reserve', 'idle_min', 'reserve_on', 'reserve_when', 'members', 'boss', 'boss_cap', 'others_cap', 'stall_min')
 
 
 def folder():
@@ -110,7 +118,9 @@ def policy():
     try: P['idle_min'] = max(0.5, min(60, float(P.get('idle_min') or 3)))
     except Exception: P['idle_min'] = 3
     P['reserve_on'] = P.get('reserve_on') is not False
-    P['reserve_when'] = 'active' if P.get('reserve_when') == 'active' else 'always'
+    P['reserve_when'] = 'always' if P.get('reserve_when') == 'always' else 'active'
+    try: P['stall_min'] = max(1, min(30, float(P.get('stall_min') or 4)))
+    except Exception: P['stall_min'] = 4
     m = P.get('members'); P['members'] = [str(x) for x in m] if isinstance(m, list) else None
     b = P.get('boss'); P['boss'] = [str(x) for x in b] if isinstance(b, list) else ['ComfyRemote']
     try: P['boss_cap'] = max(10, min(95, float(P.get('boss_cap') or 80)))
@@ -163,23 +173,71 @@ def member(app, pol):
     return m is None or str(app) in m
 
 
+_GPU = {'t': 0.0, 'v': None, 'busy_t': 0.0}
+_BOSS = {}
+
+
+def gpu_util():
+    """整台電腦顯示卡使用率 %（nvidia-smi，5 秒讀一次；讀不到 → None）."""
+    now = time.time()
+    if now - _GPU['t'] < 5: return _GPU['v']
+    _GPU['t'] = now
+    try:
+        import subprocess
+        r = subprocess.run(['nvidia-smi', '--query-gpu=utilization.gpu', '--format=csv,noheader,nounits'], capture_output=True, timeout=4,
+                           creationflags=0x08000000 if os.name == 'nt' else 0)
+        v = max(float(x) for x in r.stdout.decode('ascii', 'ignore').split() if x.strip().replace('.', '', 1).isdigit())
+    except Exception: v = None
+    _GPU['v'] = v
+    if v is not None and v >= 25: _GPU['busy_t'] = now
+    return v
+
+
+def boss_check(p, pol):
+    """👑 要效能的程式是不是真的在跑：(ok, why). 沒進度太久 → 不算數."""
+    now = time.time(); a = str(p.get('app')); st = _BOSS.setdefault(a, {'since': now, 'prog': None, 'pt': now})
+    if now - st.get('seen', now) > 30: st.update(since=now, prog=None, pt=now)          # 中間停過 → 重新算
+    st['seen'] = now
+    lim = float(pol.get('stall_min') or 4) * 60
+    if p.get('stuck'): return False, '自己說卡住了'
+    if p.get('prog_t') is not None:
+        age = now - float(p.get('prog_t') or 0)
+        return (age < lim, '' if age < lim else f'{age / 60:.0f} 分鐘沒有進度')
+    if p.get('prog') is not None:
+        if p.get('prog') != st['prog']: st['prog'] = p.get('prog'); st['pt'] = now
+        age = now - st['pt']
+        return (age < lim, '' if age < lim else f'{age / 60:.0f} 分鐘沒有進度')
+    if now - st['since'] < 120: return True, ''                                         # 剛開始：先讓它載模型
+    g = gpu_util()
+    if g is None: return True, ''                                                       # 量不到就相信它
+    age = now - max(_GPU['busy_t'], st['since'])
+    return (age < lim, '' if age < lim else f'{age / 60:.0f} 分鐘顯示卡都沒在動（{g:.0f}%）')
+
+
 def decide_with(me, P, pol=None, idle=None):
-    """規則本體（第 3 版）。me＝自己的狀態、P＝還在的別人（list）、pol＝policy()、idle＝idle_seconds().
-    回傳的欄位跟第 1、2 版一樣（舊程式照用），另外有 share／budget／user_active／level／members."""
+    """規則本體（第 4 版）。me＝自己的狀態、P＝還在的別人（list）、pol＝policy()、idle＝idle_seconds().
+    回傳的欄位跟第 1～3 版一樣（舊程式照用），另外有 share／budget／user_active／level／members／stalled."""
     pol = pol or policy()
-    active = idle is not None and idle < float(pol.get('idle_min') or 3) * 60
+    active = idle is not None and idle < float(pol.get('idle_min') or 2) * 60
     use_res = pol.get('reserve_on', True) and (pol.get('reserve_when') == 'always' or active)
     budget = 100.0 - float(pol.get('reserve') or 0) if use_res else 100.0
     my = str(me.get('app') or '')
     Q = [p for p in P if member(p.get('app'), pol)]
-    heavy = lambda x: int(x.get('want') or 0) >= 2
     nm_ = lambda x: x.get('name') or x.get('app')
+    bosses = list(pol.get('boss') or [])
+    stalled = []
+    for p in Q:                                                                   # 👑 卡住的不算在忙
+        if str(p.get('app')) in bosses and int(p.get('want') or 0) >= 2:
+            ok, why = boss_check(p, pol)
+            if not ok: p['_stalled'] = why; stalled.append({'app': p.get('app'), 'name': nm_(p), 'why': why})
+    heavy = lambda x: int(x.get('want') or 0) >= 2 and not x.get('_stalled')
     mx_nv = int((me.get('max') or {}).get('nvenc') or 8)
     base = {'cpu_cap': None, 'nvenc_cap': None, 'no_new_heavy': False, 'peers': [_brief(p) for p in P], 'rules': RULES,
-            'user_active': bool(active), 'budget': round(budget, 1), 'share': None, 'members': pol.get('members'), 'peer': ''}
+            'user_active': bool(active), 'budget': round(budget, 1), 'share': None, 'members': pol.get('members'), 'peer': '', 'stalled': stalled}
+    sw = ''.join(f'（{s_["name"]} {s_["why"]}，不讓了）' for s_ in stalled)
 
     def out(mode, cap, why, **kw):
-        d = {**base, 'mode': mode, 'why': why, **kw}
+        d = {**base, 'mode': mode, 'why': why + sw, **kw}
         if cap is not None and cap < 99.9:
             d['cpu_cap'] = round(cap, 1); d['nvenc_cap'] = max(1, int(round(mx_nv * cap / 100.0)))
         d['level'] = 10 if d['cpu_cap'] is None else max(1, min(10, int(d['cpu_cap'] / 10.0 + 0.5)))
@@ -188,24 +246,24 @@ def decide_with(me, P, pol=None, idle=None):
         return out('alone', None, '握手關著')
     if not member(my, pol):
         return out('alone', None, '這台電腦沒勾這個程式參與，照常跑')
-    mine = heavy(me)
-    bosses = list(pol.get('boss') or [])
+    mine = int(me.get('want') or 0) >= 2
     rest = 100.0 - budget
+    utxt = f'（你在用電腦，留 {rest:.0f}%）' if rest > 0 else ''
     if my in bosses and mine:                                                     # 👑 這邊最優先
         others = [p for p in Q if heavy(p) and str(p.get('app')) not in bosses]
         b2 = [p for p in Q if heavy(p) and str(p.get('app')) in bosses]
-        cap = float(pol['boss_cap']) / (1 + len(b2))
+        cap = float(pol['boss_cap']) / (1 + len(b2)) if others or b2 else budget
         return out('lead', cap, f'這邊最優先：用 {cap:.0f}%' + (f'，{"、".join(nm_(p) for p in others)} 先降到 {pol["others_cap"]:.0f}%' if others else ''),
                    peer=nm_(others[0]) if others else '')
     bp = [p for p in Q if heavy(p) and str(p.get('app')) in bosses]
-    if bp:                                                                        # 👑 別人最優先
+    if bp:                                                                        # 👑 別人最優先（而且真的在跑）
         oc = float(pol['others_cap'])
-        return out('yield', oc if mine else None, f'{nm_(bp[0])} 最優先（{pol["boss_cap"]:.0f}%），這邊先降到 {oc:.0f}%', peer=nm_(bp[0]),
+        return out('yield', oc if mine else None, f'{nm_(bp[0])} 正在跑（{pol["boss_cap"]:.0f}%），這邊先降到 {oc:.0f}%', peer=nm_(bp[0]),
                    peer_want=int(bp[0].get('want') or 0), peer_what=bp[0].get('what', ''))
     H = [p for p in Q if heavy(p)]
     if not mine or not H:
-        why = '沒有別的程式在忙' if mine else '這邊沒在做重工作'
-        return out('alone', budget if mine else None, why + (f'（留 {rest:.0f}% 給你 → 最多 {budget:.0f}%）' if mine and rest > 0 else ''))
+        why = ('沒有別的程式在忙，全力跑' if rest <= 0 else '沒有別的程式在忙') if mine else '這邊沒在做重工作'
+        return out('alone', budget if mine else None, why + (utxt if mine else ''))
     up = [p for p in H if lead_of(me, p) is p]
     if up:                                                                        # 有人優先比這邊高
         p = up[0]; w = int(p.get('want') or 0)
@@ -217,7 +275,7 @@ def decide_with(me, P, pol=None, idle=None):
     if not tie:
         return out('lead', room, f'這邊先跑，{"、".join(nm_(p) for p in low)} 讓路', peer=nm_(low[0]))
     sh = share_of(my, tie, pol); cap = room * sh / 100.0
-    return out('split', cap, f'跟 {"、".join(nm_(p) for p in tie)} 分：這邊 {cap:.0f}%' + (f'（留 {rest:.0f}% 給你）' if rest > 0 else ''),
+    return out('split', cap, f'跟 {"、".join(nm_(p) for p in tie)} 分：這邊 {cap:.0f}%' + utxt,
                share=round(sh, 1), peer=nm_(tie[0]), peer_want=int(tie[0].get('want') or 0), peer_what=tie[0].get('what', ''))
 
 
@@ -283,8 +341,10 @@ class Handshake:
                 'host': os.environ.get('COMPUTERNAME', ''), 't': time.time(), 'on': S.get('on', True) is not False,
                 'want': max(0, min(3, int(S.get('want') or 0))), 'prio': max(0, min(10, int(S.get('prio') if S.get('prio') is not None else 5))),
                 'what': str(S.get('what') or '')[:120], 'use': dict(S.get('use') or {}), 'max': dict(S.get('max') or {}),
+                **{k: S[k] for k in ('prog', 'prog_t', 'stuck') if S.get(k) is not None},
                 'rules': int(getattr(m, 'RULES', RULES)) if m else RULES, 'rules_own': RULES,
-                'mode': (self.decide().get('mode') if self.me else 'alone')}
+                'mode': (self.decide().get('mode') if self.me else 'alone'),
+                'saw_stalled': [x.get('app') for x in ((self.decide().get('stalled') or []) if self.me else [])]}
 
     def write(self):
         self.me = self._me(); tmp = self.path.with_suffix('.tmp')

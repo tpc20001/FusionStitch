@@ -88,7 +88,11 @@ def state() -> dict:
         what = (what + "，" if what else "") + f"360 轉檔 {len(run)} 支在跑" + (f"、{len(wait)} 支排隊" if wait else "")
     elif small:
         what = "中繼複製／補標記"
-    return {"on": core.cfg("hs_on") is not False, "want": want,
+    prog = int(sum(float(getattr(j, "progress", 0) or 0) for j in run) * 1000) + len([j for j in js if j.status == "done"]) * 1000
+    if prog != _g.get("prog"):
+        _g["prog"] = prog
+        _g["prog_t"] = now
+    return {"on": core.cfg("hs_on") is not False, "want": want, "prog": prog, "prog_t": _g.get("prog_t", now) if (run or wait) else now,
             "prio": int(core.cfg("hs_prio") if core.cfg("hs_prio") is not None else 5), "what": what,
             "use": {"cpu": _cpu(), "gpu": 0, "nvenc": len(enc), "disks": []}, "max": {"nvenc": 8}}
 
@@ -183,7 +187,16 @@ def status() -> dict:
             "policy_by": P.get("by", ""), "no_new": bool(d.get("no_new_heavy")),
             "lv": d.get("level", 10), "cap": d.get("cpu_cap"), "apps": list(getattr(HS, "APPS", ["FusionStitch", "SortCut"])),
             "members": P.get("members"), "boss": P.get("boss"), "boss_cap": P.get("boss_cap"), "others_cap": P.get("others_cap"),
-            "reserve_when": P.get("reserve_when", "active")}
+            "reserve_when": P.get("reserve_when", "active"), "stalled": d.get("stalled") or [],
+            "stall_min": P.get("stall_min", 4), "gpu": _gpu()}
+
+
+def _gpu():
+    try:
+        import app_handshake as HS
+        return HS.gpu_util() if hasattr(HS, "gpu_util") else None
+    except Exception:
+        return None
 
 
 def act(body: dict) -> dict:
@@ -217,7 +230,7 @@ def act(body: dict) -> dict:
         m = body["members"]
         pol["members"] = None if m is None else [str(x) for x in m]
         msg.append("參與：" + ("全部" if m is None else "、".join(pol["members"]) or "沒有"))
-    for k, t in (("boss_cap", "最優先的用"), ("others_cap", "其他降到")):
+    for k, t in (("boss_cap", "最優先的用"), ("others_cap", "其他降到"), ("stall_min", "幾分鐘沒進度算卡住：")):
         if body.get(k) is not None:
             pol[k] = float(body[k])
             msg.append(f"{t} {float(body[k]):.0f}%")
