@@ -124,10 +124,9 @@ def hs():
         return new
 
 
-def decide() -> dict:
+def _compute():
+    """(背景執行緒) 真的去算：可能用到別的程式提供的新版規則、nvidia-smi，所以不能在畫面的執行緒跑."""
     now = time.time()
-    if now - _g["t"] < 1.0:
-        return _g["d"]
     try:
         d = hs().decide()
     except Exception as e:
@@ -136,9 +135,53 @@ def decide() -> dict:
         d = {**d, "mode": "alone", "cpu_cap": None, "nvenc_cap": None, "no_new_heavy": False, "why": "握手關著"}
     old = _g["d"].get("mode")
     _g.update(d=d, t=now)
+    try:
+        import app_handshake as HS
+        if hasattr(HS, "gpu_util"):
+            _g["gpu"] = HS.gpu_util()
+    except Exception:
+        pass
     if old is not None and old != d.get("mode"):
         core.log(f"handshake: {old} → {d.get('mode')}：{d.get('why', '')}")
-    return d
+
+
+def _worker_loop(gen):
+    while True:
+        m = sys.modules.get(__name__)
+        h = _holder()
+        if getattr(h, "_fs_hsw_gen", None) != gen:
+            return                                     # 熱更新換了新的
+        t0 = time.time()
+        try:
+            m._compute()
+        except Exception:
+            pass
+        if time.time() - t0 > 3:
+            core.log(f"handshake: 算一次花了 {time.time() - t0:.1f} 秒（在背景，不影響畫面）")
+        time.sleep(1.0)
+
+
+def _ensure_worker():
+    h = _holder()
+    th = getattr(h, "_fs_hsw", None)
+    if th is not None and th.is_alive() and getattr(h, "_fs_hsw_gen", None) == WORKER_GEN:
+        return
+    setattr(h, "_fs_hsw_gen", WORKER_GEN)
+    th = threading.Thread(target=_worker_loop, args=(WORKER_GEN,), name=f"hsdecide{WORKER_GEN}", daemon=True)
+    setattr(h, "_fs_hsw", th)
+    th.start()
+
+
+WORKER_GEN = 2
+
+
+def decide() -> dict:
+    """畫面、轉檔都只讀背景算好的結果（永遠不會卡）."""
+    try:
+        _ensure_worker()
+    except Exception:
+        pass
+    return _g["d"] or {"mode": "alone", "why": "握手啟動中", "cpu_cap": None, "no_new_heavy": False}
 
 
 def level() -> float:
@@ -198,11 +241,7 @@ def status() -> dict:
 
 
 def _gpu():
-    try:
-        import app_handshake as HS
-        return HS.gpu_util() if hasattr(HS, "gpu_util") else None
-    except Exception:
-        return None
+    return _g.get("gpu")                    # (背景算好的；畫面不叫 nvidia-smi)
 
 
 def act(body: dict) -> dict:
