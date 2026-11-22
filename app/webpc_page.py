@@ -525,9 +525,15 @@ ${["running","queued","paused","error"].includes(j.status)?`<button class="pill"
 .qsh b{flex:1;color:var(--strong);font-size:15.5px}.qsec.cl .qsb{display:none}.qsec.cl .btar{transform:rotate(-90deg)}.qsb{padding:0 10px 10px}.qsb.panel{margin:0;border:0;border-radius:0}
 .qsec[data-qs="hist"]{opacity:.85}.qsec[data-qs="hist"] .qsh b{color:var(--sub)}
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}@media(min-width:600px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(min-width:900px){.tiles{grid-template-columns:repeat(5,minmax(0,1fr))}}
-.tile{position:relative;border:1px solid var(--line);border-radius:12px;background:#121a24;padding:9px 9px 7px;min-height:120px;display:flex;flex-direction:column;gap:3px}
+.tile{position:relative;border:1px solid var(--line);border-radius:14px;background:#121a24;padding:0 0 7px;display:flex;flex-direction:column;gap:4px;overflow:hidden;transition:border-color .15s}
+.tile:hover{border-color:#2b6a9c}.tpw{position:relative}.tpic{aspect-ratio:2/1;background:#0a0f15 linear-gradient(90deg,#0d141c,#131c27,#0d141c);overflow:hidden}
+.tpic img,.hpic img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .3s}
+.tpw .tq{position:absolute;top:6px;left:6px;box-shadow:0 1px 4px rgba(0,0,0,.6)}.tdate{padding:2px 9px 0;font-size:13.5px;color:#c8d3df}.tdate b{color:#fff;font-size:16px;margin-left:2px}
+.tinfo{display:flex;justify-content:space-between;gap:6px;padding:0 9px;font-size:12px;color:var(--sub)}.tinfo b{color:#9fe3b8}.tile .tb{padding:0 9px}.tile .ta{padding:2px 7px 0}
+.hrow{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:10px;align-items:start}@media(max-width:640px){.hrow{grid-template-columns:1fr}}
+.hpic{aspect-ratio:2/1;border-radius:12px;overflow:hidden;background:#0a0f15;border:1px solid #2b6a9c;margin-top:2px}.hshot{font-size:15px;color:#bfe3ff;margin:2px 2px 4px}.hshot b{color:#fff;font-size:20px}.hshot span{font-size:12px;color:var(--sub);margin-left:6px}
 .tile.paused{border-color:#6b5a14;background:#1d1a10}.tile.error{border-color:#6b2a33;background:#211215}
-.tq{align-self:flex-start;font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 7px;background:#16324a;color:#9fd4ff}.tq.tp{background:#3a3110;color:#ffe08a}.tq.te{background:#3a1419;color:#ff9aa6}
+.tq{align-self:flex-start;font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 7px;background:#16324acc;color:#cfe8ff}.tq.tp{background:#3a3110;color:#ffe08a}.tq.te{background:#3a1419;color:#ff9aa6}
 .tt{font-weight:800;color:var(--strong);font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tb{font-size:11.5px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tm{font-size:12.5px;color:#c8d3df}.ta{display:flex;gap:4px;margin-top:auto;padding-top:5px}.ta button{flex:1;min-width:0;border:1px solid var(--line);background:#0e151d;color:var(--txt);border-radius:7px;padding:4px 0;font-size:13px}
 .bt{border:1px solid var(--line);border-radius:14px;margin:10px 0;background:var(--card);overflow:hidden}.bt.run{border-color:#2b6a9c}
@@ -553,16 +559,20 @@ ${b.warn?`<div class="bwarn">${esc(b.warn)}</div>`:""}
 ${b.active||b.errors?`<div class="bacts">${b.active?`<button class="pill" data-ba="pause" data-bid="${esc(b.id)}">⏸ 整批暫停</button>`:""}<button class="pill" data-ba="resume" data-bid="${esc(b.id)}">▶ 整批繼續</button><button class="pill bx" data-ba="cancel" data-bid="${esc(b.id)}">✕ 取消整批</button></div>`:""}</div>
 ${withJobs?`<div class="btj">${L.map(j=>JC(j,b)).join("")}</div>`:""}</div>`;return h;};
   const bOf={};d.batches.forEach(b=>b.jobs.forEach(x=>bOf[x]=b));
+  const SHOT=j=>{if(!j.shot)return {d:"",t:""};const [a,b]=j.shot.split(" ");return {d:a.replace(/-/g,"/"),t:b};};
+  const PIC=(j,cls)=>`<div class="${cls}"><img loading="lazy" alt="" src="/api/jobpair?id=${j.id}" onload="this.style.opacity=1" onerror="qkImgErr(this)"></div>`;
   const RUN=d.jobs.filter(j=>j.status==="running");
   const WAIT=d.jobs.filter(j=>["queued","paused","error"].includes(j.status)||(j.status==="running"&&false));
   const qn={};let k=0;d.jobs.filter(j=>j.status==="queued").forEach(j=>qn[j.id]=++k);
   const fin=d.all_finish;
   let hero=`<div class="qhero"><div class="qhh"><b>🎬 正在轉檔</b>${fin?`<span class="qfin">⏱ 預計 <b>${fmtClk(fin.at)}</b> 全部完成 · 剩 ${fd(fin.at-Date.now()/1000)} · ${fin.n} 支</span>`:""}</div>`+
-   (RUN.length?RUN.map(j=>JC(j,bOf[j.id])).join(""):`<div class="snote" style="margin:6px 2px">${WAIT.length?"準備中…":"沒有在轉的影片"}</div>`)+`</div>`;
-  const TJ=j=>{const b=bOf[j.id],jf=b&&b.job_finish[j.id],js=b&&b.job_size[j.id];
+   (RUN.length?RUN.map(j=>{const sh=SHOT(j);return `<div class="hrow">${PIC(j,"hpic")}<div class="hmain">${sh.d?`<div class="hshot">📅 ${esc(sh.d)} <b>${esc(sh.t)}</b> <span>GP${esc(j.num)}</span></div>`:""}${JC(j,bOf[j.id])}</div></div>`;}).join(""):`<div class="snote" style="margin:6px 2px">${WAIT.length?"準備中…":"沒有在轉的影片"}</div>`)+`</div>`;
+  const TJ=j=>{const b=bOf[j.id],jf=b&&b.job_finish[j.id],js=b&&b.job_size[j.id],sh=SHOT(j);
     const st=j.status==="queued"?`<span class="tq">第 ${qn[j.id]} 個</span>`:j.status==="paused"?`<span class="tq tp">⏸ 暫停</span>`:`<span class="tq te">⚠ 失敗</span>`;
-    return `<div class="tile ${j.status}">${st}<div class="tt">${esc(j.title)}</div><div class="tb">📁 ${esc(b?b.title:"")}</div>
-<div class="tm">${jf&&j.status==="queued"?`🕒 ${fmtClk(jf)}`:"🕒 —"}</div><div class="tm">💾 ${js?fmtB(js):"—"}</div>
+    return `<div class="tile ${j.status}"><div class="tpw">${PIC(j,"tpic")}${st}</div>
+<div class="tdate">${sh.d?`${esc(sh.d)} <b>${esc(sh.t)}</b>`:esc(j.title)}</div>
+<div class="tinfo"><span>${jf&&j.status==="queued"?`🕒 ${fmtClk(jf)} 完成`:j.status==="paused"?"🕒 暫停中":"🕒 —"}</span><span>${j.src?fmtB(j.src)+" → ":""}<b>${js?fmtB(js):"—"}</b></span></div>
+<div class="tb">📁 ${esc(b?b.title:"")}${j.num?` · GP${esc(j.num)}`:""}</div>
 <div class="ta">${j.status==="queued"?`<button data-j="${j.id}" data-a="top" title="置頂">⤒</button><button data-j="${j.id}" data-a="up" title="往前">↑</button><button data-j="${j.id}" data-a="down" title="往後">↓</button><button data-j="${j.id}" data-a="pause" title="暫停">⏸</button>`:`<button data-j="${j.id}" data-a="resume" title="${j.status==="error"?"重試":"繼續"}">${j.status==="error"?"↻":"▶"}</button><button data-j="${j.id}" data-a="top" title="置頂">⤒</button>`}<button data-j="${j.id}" data-a="cancel" title="取消">✕</button></div></div>`;};
   const ACT=d.batches.filter(b=>b.active||b.errors),OLD=d.batches.filter(b=>!b.active&&!b.errors);
   const sec=(id,title,body,defOpen)=>{const c=bcolGet();const cl=c.has("q:"+id)||(!defOpen&&!c.has("o:q:"+id));

@@ -112,6 +112,41 @@ def clip_thumb(cid: str) -> bytes | None:
     return None
 
 
+_SRC = {}
+
+
+def _shot_of(j) -> str:
+    """拍攝時間 '2026-07-25 21:20'（從成品檔名 20260725_212041_… 來）."""
+    import re
+    m = re.match(r"(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})", os.path.basename(j.output or ""))
+    return f"{m[1]}-{m[2]}-{m[3]} {m[4]}:{m[5]}" if m else ""
+
+
+def _src_of(j):
+    v = _SRC.get(j.id)
+    if v is None:
+        try:
+            v = sum(os.path.getsize(f) for f in (list(j.clip.get("front") or []) + list(j.clip.get("back") or [])) if f.lower().endswith(".mp4"))
+        except OSError:
+            v = 0
+        _SRC[j.id] = v
+    return v
+
+
+def job_pair(jid: str) -> bytes | None:
+    """排隊方格的小畫面：跟快速轉檔一樣的前／後鏡頭第 5 秒."""
+    import framepair
+    q = _queue()
+    j = next((x for x in (q.jobs if q else []) if str(x.id) == str(jid)), None)
+    if not j:
+        return None
+    p = framepair.wait(dict(j.clip), 6.0)
+    if p:
+        with open(p, "rb") as f:
+            return f.read()
+    return None
+
+
 def clip_pair(cid: str) -> bytes | None:
     """Front + back frame at 5 s (made on demand, waits up to 25 s)."""
     import framepair
@@ -330,7 +365,8 @@ def queue_state() -> dict:
                       "eta": j.eta, "message": j.message, "detail": getattr(j, "detail", ""),
                       "engine": getattr(j, "engine_desc", ""), "name": os.path.basename(j.output or ""),
                       "retry_in": max(0, int(nb - time.time())) if j.status == "queued" and nb > time.time() else 0,
-                      "batch": _bid(j), "out_dir": os.path.dirname(j.output or ""), "copy": _copy_of(j), "ov": _ov_of(j)})
+                      "batch": _bid(j), "out_dir": os.path.dirname(j.output or ""), "copy": _copy_of(j), "ov": _ov_of(j),
+                      "shot": _shot_of(j), "src": _src_of(j), "num": str(j.clip.get("num") or "")})
     relay = ""
     try:
         import staging
@@ -1068,6 +1104,9 @@ def handle(method: str, path: str, query: dict, body: dict, remote) -> tuple:
                 return J(settings())
             if path == "/api/clippair":
                 b = clip_pair(query.get("id", ""))
+                return (200, "image/jpeg", b) if b else (404, "text/plain", b"")
+            if path == "/api/jobpair":
+                b = job_pair(query.get("id", ""))
                 return (200, "image/jpeg", b) if b else (404, "text/plain", b"")
             if path == "/api/clipthumb":
                 b = clip_thumb(query.get("id", ""))
