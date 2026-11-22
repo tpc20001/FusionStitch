@@ -144,6 +144,17 @@ def queue_clips(ids: list, preset: str | None) -> dict:
     return {"ok": True, "message": f"已加入 {n} 個轉檔工作"}
 
 
+def queue_folders(dirs: list, preset: str | None) -> dict:
+    """📂 several footage folders at once (each its own batch)."""
+    dirs = [d for d in dirs if d and os.path.isdir(d)]
+    if not dirs:
+        return {"ok": False, "message": "沒有勾選資料夾"}
+    res = ui(lambda: _win().queue_folders(dirs, preset or None))
+    add = sum(a for a, _ in res.values())
+    return {"ok": True, "message": f"📂 {len(dirs)} 個資料夾，共加入 {add} 個轉檔工作",
+            "detail": [{"folder": f, "add": a, "skip": k} for f, (a, k) in res.items()]}
+
+
 def queue_new(preset: str | None) -> dict:
     lib = library()
     ids = [c["id"] for c in lib["clips"] if c["status"] == "" and c["complete"]]
@@ -1148,6 +1159,8 @@ def handle(method: str, path: str, query: dict, body: dict, remote) -> tuple:
             return J(scan(body.get("folder") or (_win().folder if _win() else "")))
         if path == "/api/library/queue":
             return J(queue_clips(list(body.get("ids") or []), body.get("preset")))
+        if path == "/api/queue_folders":
+            return J(queue_folders([str(x) for x in (body.get("dirs") or [])], body.get("preset")))
         if path == "/api/library/queue_new":
             return J(queue_new(body.get("preset")))
         if path == "/api/library/auto":

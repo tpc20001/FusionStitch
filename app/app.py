@@ -3828,12 +3828,14 @@ class MainWindow(QMainWindow):
         pk = m.group(2) if m.group(2) in jobs.all_presets() else None
         return self.queue_clip(cid, pk)
 
-    def queue_clip(self, cid, preset=None) -> bool:
-        """Queue with the saved calibration and the current output settings (or the given preset)."""
-        c = self.clips.get(cid)
+    def queue_clip(self, cid, preset=None, folder=None, clip=None) -> bool:
+        """Queue with the saved calibration and the current output settings (or the given preset).
+        folder/clip: queue a clip of another footage folder (📂 複選資料夾) without switching to it."""
+        folder = folder or self.folder
+        c = clip if clip is not None else self.clips.get(cid)
         if not c or not c["complete"]:
             return False
-        meta = self.meta.get(cid) or clip_meta(c)
+        meta = (self.meta.get(cid) if clip is None else None) or clip_meta(c)
         if c["kind"] == "video":
             tl = media.timeline(c["front"])
             w, h = tl.width, tl.height
@@ -3842,7 +3844,7 @@ class MainWindow(QMainWindow):
             h, w = imread(c["front"][0]).shape[:2]
         cal = (cfg("calibration") or {}).get(f"{w}x{h}")
         params = geo.merge_params(geo.default_params(w, h), cal) if cal else geo.default_params(w, h)
-        proj = projects.get(self.folder, cid)
+        proj = projects.get(folder, cid)
         if proj.get("params"):
             params = geo.merge_params(geo.default_params(w, h), proj["params"])
         kind = proj.get("projection") or cfg("projection") or "equirect"
@@ -3856,12 +3858,12 @@ class MainWindow(QMainWindow):
             name = f"{stem}_{sp:g}x.{e_}"
         try:
             import batches
-            bid = batches.assign(self.folder)
+            bid = batches.assign(folder)
             bdest = batches.get(bid).get("dest")
         except Exception as e:
             core.log(f"batch assign: {e}")
             bid, bdest = None, ""
-        out = str((Path(bdest) if bdest else output_folder(self.folder)) / name)
+        out = str((Path(bdest) if bdest else output_folder(folder)) / name)
         spatial = bool(not planet and cfg("spatial_audio") and c.get("wavs") and len(c["wavs"]) == len(c["back"]))
         opts = {"preset": preset, "engine": "auto", "params": params, "audio": True, "output": out,
                 "spatial_audio": spatial,
@@ -3880,9 +3882,9 @@ class MainWindow(QMainWindow):
             opts["start"] = proj["in"] / fps
         if proj.get("out") is not None:
             opts["end"] = proj["out"] / fps
-        return self.submit(c, opts, quiet=True)
+        return self.submit(c, opts, quiet=True, folder=folder)
 
-    def submit(self, clip, opts, quiet=False) -> bool:
+    def submit(self, clip, opts, quiet=False, folder=None) -> bool:
         out = opts.get("output")
         if not out:
             QMessageBox.warning(self, "輸出", "請指定輸出檔案。")
@@ -3898,12 +3900,48 @@ class MainWindow(QMainWindow):
             if QMessageBox.question(self, "檔案已存在", f"{out}\n已存在，要覆蓋嗎？") != QMessageBox.Yes:
                 return False
         clip = dict(clip)
-        clip["folder"] = self.folder
+        clip["folder"] = folder or self.folder
         Path(out).parent.mkdir(parents=True, exist_ok=True)
         q.add(clip, opts)
         self.toast(f"已加入佇列：{Path(out).name}")
         self.library.refresh_status()
         return True
+
+    def queue_folders(self, folders_, preset=None, progress=None) -> dict:
+        """📂 一次把好幾個素材資料夾的影片加入佇列（每個資料夾自己一批）。
+        跳過：不完整、已經在佇列、成品已經存在、以前轉過（✓ 已轉過）。回傳 {folder: (加入, 略過)}."""
+        import clips as clips_mod
+        import donemark
+        import folders
+        res = {}
+        for i, f in enumerate(folders_):
+            add = skip = 0
+            try:
+                cs = clips_mod.scan(f)
+            except Exception as e:
+                core.log(f"queue_folders scan {f}: {e}")
+                cs = []
+            dfs = donemark.folders_for(str(output_folder(f)))
+            for j, c in enumerate(cs):
+                if progress:
+                    progress(f"{os.path.basename(f)}（{i + 1}/{len(folders_)}）：{j + 1}/{len(cs)}")
+                if not c.get("complete") or c.get("kind") != "video":
+                    skip += 1
+                    continue
+                try:
+                    if donemark.find(c, clip_meta(c), None, dfs):
+                        skip += 1
+                        continue
+                    if self.queue_clip(c["id"], preset, folder=f, clip=c):
+                        add += 1
+                    else:
+                        skip += 1
+                except Exception as e:
+                    core.log(f"queue_folders {f} {c.get('id')}: {e}")
+                    skip += 1
+            res[f] = (add, skip)
+            folders.remember("footage", f)
+        return res
 
     def _job_finished(self, j):
         self.library.refresh_status()

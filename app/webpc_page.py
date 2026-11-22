@@ -341,7 +341,9 @@ async function viewQuick(){$("#clk").textContent="";const host=V();if(!S.qk)host
 <div class="qkC"><div class="qkH">① 素材資料夾（電腦上的）</div><div class="qkPath">${esc(d.folder||"尚未選擇")}</div>
 <div class="qkRow">${d.parent!=null&&d.folder?`<button data-up="${esc(d.parent)}">⬆ 上一層</button>`:""}<button id="qkPick">選擇其他資料夾…</button>
 ${d.recent.length?`<select id="qkRec"><option value="">最近用過…</option>${d.recent.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select>`:""}</div>
-${d.dirs.length?`<div style="margin-top:8px">${d.dirs.map(x=>`<div class="qkD" data-go="${esc(x)}">📁 ${nm(x)}</div>`).join("")}</div>`:""}</div>
+${d.dirs.length?`<div style="margin-top:8px">${d.dirs.map(x=>`<div class="qkD" data-go="${esc(x)}" style="display:flex;align-items:center;gap:10px"><input type="checkbox" data-dsel="${esc(x)}" ${QDSEL.has(x)?"checked":""} style="width:20px;height:20px;flex:none">📁 ${nm(x)}</div>`).join("")}</div>
+<div class="qkTip info" style="margin-top:8px">勾選多個資料夾 → 一次全部加入佇列（每個資料夾自己一批，用下面 ③ 的成品位置和格式；轉過的會略過）</div>
+<button class="pill" id="qkDGo" style="width:100%;margin-top:6px" ${QDSEL.size?"":"disabled"}>📂 勾選的 <b id="qkDN">${QDSEL.size}</b> 個資料夾全部加入佇列</button>`:""}</div>
 <div class="qkC"><div class="qkH" style="display:flex;align-items:center;gap:8px">② 影片（${good.length}${QHIDE&&nDone?`，藏了 ${nDone} 支已轉過`:""}）${nDone?`<label style="margin-left:auto;font-weight:400;font-size:13px;color:var(--sub);display:flex;gap:6px;align-items:center"><input type="checkbox" id="qkHide" ${QHIDE?"checked":""}>只看沒轉過的</label>`:""}</div>${good.length?good.map(c=>`<label class="qkCl"><input type="checkbox" data-id="${esc(c.id)}"${QSEL.ids.has(c.id)?" checked":""}${c.complete?"":" disabled"}><b>${esc(c.name)}</b>${qkImg(c)}<small>${esc(c.time||"")} · ${fd(c.duration)} · ${fmtB(c.size)}${c.est?` → 約 ${fmtB(c.est)}`:""} · ${c.done&&!c.status?`<span style="color:#45d483" title="${esc(c.done.how+"："+c.done.path)}">✓ 已轉過</span>`:esc(st(c))}</small><button class="qkMv" data-pm="${esc(c.id)}" title="移到問題檔案（先不轉）">⚠</button></label>`).join(""):'<div class="qkTip info">這裡沒有 GoPro Fusion 影片，請選放素材的資料夾</div>'}</div>
 ${probs.length?`<div class="qkC qkPb"><div class="qkH" style="color:#ffb347">⚠ 問題檔案（${probs.length}）</div><div class="qkTip info">這些先不轉。原始檔案沒有被移動，只是集中在這裡，之後再分析。</div>${qkCats(probs).map(([lab,cs])=>`<div class="qkCatH">${esc(lab)}（${cs.length}）</div>`+cs.map(c=>`<div class="qkCl"><span class="qkWarn">⚠</span><b>${esc(c.name)}</b>${c.pair==="ok"?qkImg(c):""}<small>${esc(c.problem.detail||"")}<br>${esc(c.time||"")} · ${fd(c.duration)} · ${fmtB(c.size)}</small><span class="qkPbB"><button data-pc="${esc(c.id)}">重新讀取</button><button data-pr="${esc(c.id)}">移回清單</button></span></div>`).join("")).join("")}</div>`:""}
 <div class="qkC"><div class="qkH">③ 轉好的影片放在</div>
@@ -352,7 +354,12 @@ ${probs.length?`<div class="qkC qkPb"><div class="qkH" style="color:#ffb347">⚠
 <div id="qkEst">${qkEst(d)}</div><button class="qkGo" id="qkGo"${sel?"":" disabled"}>開始轉檔${sel?`（${sel} 個）`:""}</button></div>
 <div class="qkC"><div class="qkH">④ 轉檔中</div><div id="qkJobs">${fin}${jobs||'<div class="qkTip info">目前沒有轉檔工作</div>'}</div></div></div>`;
   const open=async p=>{await act("/api/quick/open",{path:p});S.qk=null;S.qkSig="";QSEL=null;setTimeout(viewQuick,700);};
-  host.onclick=async e=>{const t=e.target;const g=t.closest("[data-go]");if(g){open(g.dataset.go);return;}const u=t.closest("[data-up]");if(u){open(u.dataset.up);return;}
+  host.onclick=async e=>{const t=e.target;
+    const ds=t.closest("[data-dsel]");if(ds){if(ds.checked)QDSEL.add(ds.dataset.dsel);else QDSEL.delete(ds.dataset.dsel);const n=document.getElementById("qkDN");if(n)n.textContent=QDSEL.size;const b=document.getElementById("qkDGo");if(b)b.disabled=!QDSEL.size;return;}
+    if(t.closest("#qkDGo")){const b=t.closest("#qkDGo");b.disabled=true;b.textContent="加入中…（資料夾多會比較久）";const ps=document.getElementById("qkPre");
+      const j=await act("/api/queue_folders",{dirs:[...QDSEL],preset:ps?ps.value:null});QDSEL.clear();
+      if(j&&j.detail)toast(j.detail.map(x=>`${nm(x.folder)}：+${x.add}${x.skip?`（略過 ${x.skip}）`:""}`).join("、"));S.qkSig=null;viewQuick();return;}
+    const g=t.closest("[data-go]");if(g){open(g.dataset.go);return;}const u=t.closest("[data-up]");if(u){open(u.dataset.up);return;}
     if(t.id==="qkPick"){pickDir("選擇素材資料夾",d.folder,p=>open(p));return;}
     if(t.id==="qkOut"){pickDir("選擇成品資料夾",d.out_fixed||"",async p=>{await act("/api/quick/out",{mode:"custom",path:p});viewQuick();});return;}
     if(t.id==="qkSsd"){await act("/api/quick/ssd",{on:!d.relay_on});viewQuick();return;}
@@ -748,6 +755,7 @@ async function colorTag(dir){const p=$("#player");if(!p)return;
 async function ctWatch(){for(;;){await new Promise(r=>setTimeout(r,1000));let d;try{d=await J("/api/colortag");}catch(e){continue;}const el=$("#ctSt");if(!el)return;
   if(d.busy){el.textContent=`補標記中 ${d.done}/${d.total}：${d.cur}`;continue;}
   el.innerHTML=`✔ 完成：成功 ${d.ok.length} 支`+(d.fail.length?`，失敗 ${d.fail.length} 支<br>`+d.fail.map(esc).join("<br>"):"（重新上傳 YouTube 顏色就會正確）");const g=$("#ctGo");if(g)g.hidden=true;return;}}
+const QDSEL=new Set();
 /* ================= 🤝 右上角 Lv 1～10（跟 SortCut、ComfyRemote 一樣的介面） ================= */
 let LVV=null;const LVCOL=l=>l>=8?"#2ecc71":l>=5?"#f1c40f":l>=3?"#ff9f43":"#ff6b6b";
 function lvSet(v){LVV=v;const el=$("#lvb");if(!el)return;const on=v.on!==false,l=v.lv||10;el.classList.toggle("off",!on);el.style.setProperty("--lc",LVCOL(l));

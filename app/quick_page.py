@@ -152,8 +152,16 @@ class QuickPage(QWidget):
         l1.addLayout(row)
         self.dirs = QListWidget(); self.dirs.setObjectName("qdirs")
         self.dirs.itemDoubleClicked.connect(lambda it: self.open_folder(it.data(Qt.UserRole)))
+        self.dirs.itemChanged.connect(lambda *_: self._multi_count())
         l1.addWidget(self.dirs, 1)
-        hint = QLabel("雙擊資料夾進入；下次打開會直接回到這裡"); hint.setObjectName("sub"); l1.addWidget(hint)
+        mr = QHBoxLayout()
+        self.b_mall = QPushButton("全選"); self.b_mall.clicked.connect(lambda: self._multi_all(True)); mr.addWidget(self.b_mall)
+        self.b_mnone = QPushButton("全不選"); self.b_mnone.clicked.connect(lambda: self._multi_all(False)); mr.addWidget(self.b_mnone)
+        self.b_multi = QPushButton("📂 勾選的資料夾全部加入佇列"); self.b_multi.setEnabled(False)
+        self.b_multi.setToolTip("每個資料夾裡（含子資料夾）還沒轉過的影片，用下面 ③ 的成品位置和輸出格式加入佇列；每個資料夾自己一批")
+        self.b_multi.clicked.connect(self.queue_multi); mr.addWidget(self.b_multi, 1)
+        l1.addLayout(mr)
+        hint = QLabel("雙擊資料夾進入；勾選多個資料夾可以一次全部加入佇列"); hint.setObjectName("sub"); l1.addWidget(hint)
         l1.addWidget(Drop(self))
         split.addWidget(c1)
 
@@ -279,9 +287,55 @@ class QuickPage(QWidget):
                            and e.name.lower() != "stitched"), key=str.lower)
         except OSError:
             subs = []
+        self.dirs.blockSignals(True)
         for s in subs:
-            it = QListWidgetItem("📁  " + os.path.basename(s)); it.setData(Qt.UserRole, s); self.dirs.addItem(it)
+            it = QListWidgetItem("📁  " + os.path.basename(s)); it.setData(Qt.UserRole, s)
+            it.setFlags(it.flags() | Qt.ItemIsUserCheckable); it.setCheckState(Qt.Unchecked); self.dirs.addItem(it)
+        self.dirs.blockSignals(False)
+        self._multi_count()
         self._fill_recent()
+
+    # ---------------------------------------------------------------- 📂 複選資料夾
+    def _multi_sel(self) -> list[str]:
+        return [self.dirs.item(i).data(Qt.UserRole) for i in range(self.dirs.count())
+                if self.dirs.item(i).checkState() == Qt.Checked]
+
+    def _multi_count(self):
+        n = len(self._multi_sel())
+        self.b_multi.setEnabled(n > 0)
+        self.b_multi.setText(f"📂 勾選的 {n} 個資料夾全部加入佇列" if n else "📂 勾選資料夾 → 一次加入佇列")
+
+    def _multi_all(self, on):
+        self.dirs.blockSignals(True)
+        for i in range(self.dirs.count()):
+            self.dirs.item(i).setCheckState(Qt.Checked if on else Qt.Unchecked)
+        self.dirs.blockSignals(False)
+        self._multi_count()
+
+    def queue_multi(self):
+        sel = self._multi_sel()
+        if not sel:
+            return
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        preset = self.preset.currentData()
+        self.b_multi.setEnabled(False)
+
+        def prog(t):
+            self.b_multi.setText("加入中… " + t)
+            QApplication.processEvents()
+        try:
+            res = self.main.queue_folders(sel, preset, prog)
+        finally:
+            self._multi_all(False)
+        add = sum(a for a, _ in res.values())
+        lines = [f"{os.path.basename(f)}：加入 {a} 支" + (f"（略過 {k} 支：已轉過／在佇列／不完整）" if k else "") for f, (a, k) in res.items()]
+        try:
+            self.main.library.refresh_status()
+        except Exception:
+            pass
+        self.main.statusBar().showMessage(f"📂 {len(sel)} 個資料夾，共加入 {add} 個轉檔工作", 8000)
+        QMessageBox.information(self, "📂 加入佇列", f"共加入 {add} 個轉檔工作\n\n" + "\n".join(lines))
+        QTimer.singleShot(300, self.fill)
 
     def open_folder(self, path):
         path = os.path.normpath(path)
