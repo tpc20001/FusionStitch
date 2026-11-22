@@ -342,6 +342,19 @@ class QuickPage(QWidget):
         if not os.path.isdir(path):
             return
         self._browse(path)
+        import clips as clips_mod
+        if not clips_mod.has_clips(path):        # 上層資料夾（例 DASHCAM）：只列出子資料夾，不讀全部影片（會卡）
+            self._bo = path
+            self.table.setRowCount(0); self._rows = {}
+            self.empty.setText("這一層沒有直接放影片：雙擊進入有影片的資料夾，\n或在左邊勾選資料夾，按「📂 勾選的資料夾全部加入佇列」（勾了才會讀）")
+            self.empty.setVisible(True); self.table.setVisible(False)
+            try:
+                self._count()
+            except Exception:
+                pass
+            return
+        self._bo = None
+        self.empty.setText("這裡沒有 GoPro Fusion 影片。請在左邊選擇放素材的資料夾。")
         folders.remember("footage", path)
         self.main.library.scan(path)            # sets the program's folder (成品, 素材庫 follow)
         self._fill_out()
@@ -361,6 +374,8 @@ class QuickPage(QWidget):
         self._meta_timer.start(400)
 
     def fill(self):
+        if getattr(self, "_bo", None) and os.path.normcase(self._bo) == os.path.normcase(self.cur or ""):
+            return                                # 只在瀏覽上層資料夾：不顯示舊資料夾的影片
         if self.main.folder and os.path.normcase(self.main.folder) != os.path.normcase(self.cur or ""):
             self._browse(self.main.folder)
         clips = [c for c in (self.main.clips or {}).values() if c.get("kind") == "video"]

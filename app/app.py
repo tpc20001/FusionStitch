@@ -3729,7 +3729,7 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(300, lambda: self.set_float(True))
         if adopt:
             QTimer.singleShot(0, lambda: self._adopt(adopt))
-        elif cfg("last_folder") and os.path.isdir(cfg("last_folder")):
+        elif cfg("last_folder") and os.path.isdir(cfg("last_folder")) and __import__("clips").has_clips(cfg("last_folder")):
             QTimer.singleShot(100, lambda: self.library.scan(cfg("last_folder")))
 
     # ---- navigation

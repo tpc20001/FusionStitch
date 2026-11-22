@@ -878,8 +878,14 @@ def quick_state() -> dict:
     import quick_page
     w = _win()
     folder = (w.folder if w else "") or folders.last("footage")
+    qp = getattr(w, "quick_page", None) if w else None
+    bo = getattr(qp, "_bo", None) if qp is not None else None
+    if bo:
+        folder = bo                               # 瀏覽上層資料夾中：不顯示舊資料夾的影片
     d = dirs(folder) if folder else dirs("")
     lib = library()
+    if bo:
+        lib = {**lib, "clips": []}
     q = _queue()
     act = [j for j in (q.jobs if q else []) if j.status in ("running", "queued", "paused")]
     sched = history.schedule(act)
@@ -992,8 +998,15 @@ def quick_open(path: str) -> dict:
     import folders
     if not path or not os.path.isdir(path):
         return {"ok": False, "message": "找不到這個資料夾"}
-    folders.remember("footage", path)
-    ui(lambda: _win().library.scan(path))
+    def go():
+        w = _win()
+        qp = getattr(w, "quick_page", None)
+        if qp is not None:
+            qp.open_folder(path)                  # 上層資料夾只列子資料夾，不讀全部影片
+        else:
+            folders.remember("footage", path)
+            w.library.scan(path)
+    ui(go)
     return {"ok": True}
 
 

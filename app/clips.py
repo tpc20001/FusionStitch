@@ -27,6 +27,35 @@ def _walk(root: Path):
             yield Path(dirpath) / f
 
 
+def has_clips(folder: str, limit: int = 3000) -> bool:
+    """快速判斷：這個資料夾本身或下一層（例 100GFRNT／100GBACK）有沒有 GoPro Fusion 檔（不往更深找，不讀內容）."""
+    n = 0
+    try:
+        with os.scandir(folder) as it:
+            subs = []
+            for e in it:
+                n += 1
+                if n > limit:
+                    return False
+                if e.is_file() and (VIDEO_RE.match(e.name) or PHOTO_RE.match(e.name)):
+                    return True
+                if e.is_dir() and not e.name.startswith((".", "$")) and e.name.lower() != "stitched":
+                    subs.append(e.path)
+        for sp in subs[:50]:
+            try:
+                with os.scandir(sp) as it2:
+                    for k, e in enumerate(it2):
+                        if k > limit:
+                            break
+                        if VIDEO_RE.match(e.name) or PHOTO_RE.match(e.name):
+                            return True
+            except OSError:
+                pass
+    except OSError:
+        return False
+    return False
+
+
 def scan(folder: str) -> list[dict]:
     root = Path(folder)
     videos: dict[str, dict] = {}
