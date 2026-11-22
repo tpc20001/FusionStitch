@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 APP_NAME = "FusionStitch"
-APP_VERSION = "2.26.1"
+APP_VERSION = "2.27.0"
 LAUNCHER_API = 1          # bump when an update needs a newer launcher (FusionStitch.exe)
 
 APP_DIR = Path(__file__).resolve().parent

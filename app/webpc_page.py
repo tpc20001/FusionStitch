@@ -390,7 +390,9 @@ async function viewLib(){$("#clk").textContent="";const host=V();if(!S.lib)host.
 <div class="r2"><span>${esc(c.time)}</span><span>${fd(c.duration)}</span><span>${c.kind==="video"?c.chapters+" 章節":"照片"}</span><span>素材 ${fmtB(c.size)}</span>${c.wav?"<span>🎙 360</span>":""}</div><div class="r2">${out}</div></div></div>
 ${c.complete?`<div class="acts"><button class="pill" data-q="${esc(c.id)}">${o.length?"↻ 重新轉檔":"▶ 轉檔"}</button><button class="pill" data-g="${esc(c.id)}">🎯 GoPro 4K</button>${c.kind==="video"?`<button class="pill" data-a="${esc(c.id)}">✦ 全自動</button>`:""}${o.length?`<button class="pill" data-play="${esc(o[0][0])}">▶ 播放</button>`:""}</div>`:""}</div>`;}).join("")||'<div class="empty">沒有符合的素材</div>';
   h+=`<div class="selbar" id="selb"${S.sel.size?"":" hidden"}><span>已選 ${S.sel.size} 段</span><button class="btn s" id="bq">加入佇列</button><button class="btn s" id="bg">🎯 GoPro 4K</button><button class="btn" id="ba">✦ 全自動</button></div>`;
-  const y=window.scrollY;host.innerHTML=h;window.scrollTo(0,y);
+  const y=window.scrollY;host.innerHTML=h;const hh=document.getElementById("QHERO");if(hh)hh.innerHTML=hero;
+  {const c=bcolGet();const se=host.querySelector('[data-qs="set"]');if(se&&!c.has("o:q:set"))se.classList.add("cl");}
+  window.scrollTo(0,y);
   const pr=()=>$("#lp").value;const on=$("#lf .on");if(on)$("#lf").scrollLeft=Math.max(0,on.offsetLeft-40);
   $("#lq").oninput=e=>{if(e.isComposing)return;S.libq=e.target.value;clearTimeout(S.lqT);S.lqT=setTimeout(viewLib,300);};
   $("#lq").addEventListener("compositionend",e=>{S.libq=e.target.value;viewLib();});
@@ -499,11 +501,13 @@ async function viewQueue(){const host=V();if(!S.q)host.innerHTML='<div class="em
   let h=`<div class="stk"><div class="g2"><button class="pill" data-qa="pause" style="text-align:center">⏸ 全部暫停</button><button class="pill" data-qa="resume" style="text-align:center">▶ 全部繼續</button><button class="pill" data-qa="retry" style="text-align:center">↻ 失敗全部重試</button><button class="pill" data-qa="clear" style="text-align:center">清除已完成</button></div>
 <div class="tools" style="margin-top:6px"><span class="snote" style="margin:0;flex:none">全部轉完後</span><div class="seg" id="qafter">${A.map(([k,t])=>`<button data-k="${k}"${k===d.after?' class="on"':""}>${t}</button>`).join("")}</div></div>
 <div class="snote">${run?`▶ #${run.id} ${esc(run.title)} ${(run.progress*100).toFixed(1)}% · ${run.fps.toFixed(1)} fps · 剩 ${fd(run.eta)}`:"閒置"} · 排隊 ${d.jobs.filter(j=>j.status==="queued").length}</div></div>
-<div class="panel">
-${finH(d.all_finish)}${d.pace?paceH(d.pace):""}${hsH(d.hs)}${aftH(d.after)}<div class="r2"><span>💽 中繼 SSD</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir||"不使用")}</b><button class="pill" id="pc" style="flex:none">選擇…</button>${d.cache_dir?'<button class="pill" id="pcx" style="flex:none">不使用</button>':""}</div>
+<div id="QHERO"></div>
+<div class="qsec" data-qs="set"><div class="qsh" data-qt="set"><span class="btar">▾</span><b>⚙ 速度、握手、中繼 SSD、成品位置</b></div><div class="qsb panel">
+${d.pace?paceH(d.pace):""}${hsH(d.hs)}<div class="r2"><span>💽 中繼 SSD</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir||"不使用")}</b><button class="pill" id="pc" style="flex:none">選擇…</button>${d.cache_dir?'<button class="pill" id="pcx" style="flex:none">不使用</button>':""}</div>
 ${d.cache_dir?`<div class="r2" style="margin-top:6px"><span>💽 中繼 2（備援）</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir2||"不使用")}</b><button class="pill" id="pc2" style="flex:none">選擇…</button>${d.cache_dir2?'<button class="pill" id="pc2x" style="flex:none">不使用</button>':""}</div>`:""}
 <div class="r2" style="margin-top:6px"><span>📦 成品送到</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.dest||"素材資料夾裡的 stitched")}</b><button class="pill" id="pd" style="flex:none">選擇…</button>${d.dest?'<button class="pill" id="pdx" style="flex:none">回預設</button>':""}</div>
 ${d.relay_use?`<div class="snote">📥 中繼已先存素材：${(d.relay_use.roots||[{drive:"",used:d.relay_use.used,cap:d.relay_use.cap,main:true}]).map(x=>`${esc(x.drive)}${x.main?"（主要）":"（備援）"} ${fmtB(x.used)}${x.cap?" / "+fmtB(x.cap):""}`).join("　")}（正在轉的和下一支一定先存，其他滿了就等）</div>`:""}${d.relay?`<div class="snote">${esc(d.relay)}</div>`:""}</div>`;
+  h+=`</div></div>`;
   const JC=(j,b)=>{const s=ST[j.status]||[j.status,"t"],p=(j.status==="done"?1:j.progress)*100,stx=j.retry_in?`⚠ ${j.retry_in} 秒後重試`:s[0];
       const jf=b&&b.job_finish[j.id],js=b&&b.job_size[j.id];
       return `<div class="c ${j.status==="running"?"run":j.status==="error"?"bad":j.retry_in?"wait":""}"><div class="r1"><span class="nm">#${j.id} ${esc(j.title)}</span><span class="chip ${j.retry_in?"warn":s[1]}">${stx}</span></div>
@@ -514,7 +518,19 @@ ${["queued","paused"].includes(j.status)?`<button class="pill" data-j="${j.id}" 
 ${["running","queued","paused","error"].includes(j.status)?`<button class="pill" data-j="${j.id}" data-a="cancel">✕ 取消</button>`:""}${j.status==="done"&&j.name?`<button class="pill" data-play="${esc(j.name)}">▶ 播放</button>`:""}</div></div>`;};
   const col=bcolGet(),byId={};d.jobs.forEach(j=>byId[j.id]=j);
   BSEL=new Set([...BSEL].filter(x=>d.batches.some(b=>b.id===x)));
-  h+=`<style>.bt{border:1px solid var(--line);border-radius:14px;margin:10px 0;background:var(--card);overflow:hidden}.bt.run{border-color:#2b6a9c}
+  h+=`<style>.qhero{border:2px solid #2b8ad8;border-radius:16px;background:linear-gradient(180deg,#0f2436,#0c1824);padding:10px 10px 4px;margin:10px 0 12px;box-shadow:0 0 0 3px rgba(43,138,216,.12)}
+.qhh{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin:0 2px 6px}.qhh>b{font-size:19px;color:#7cc4ff}.qfin{font-size:13.5px;color:#bfe3ff}.qfin b{color:#fff;font-size:15px}
+.qhero .c{background:#0b1b2a;border-color:#2b6a9c}.qhero .c .nm{font-size:18px;color:#fff}.qhero .c .r2{font-size:14px}
+.qsec{border:1px solid var(--line);border-radius:14px;margin:10px 0;background:var(--card);overflow:hidden}.qsh{display:flex;gap:8px;align-items:center;padding:11px 12px;cursor:pointer}
+.qsh b{flex:1;color:var(--strong);font-size:15.5px}.qsec.cl .qsb{display:none}.qsec.cl .btar{transform:rotate(-90deg)}.qsb{padding:0 10px 10px}.qsb.panel{margin:0;border:0;border-radius:0}
+.qsec[data-qs="hist"]{opacity:.85}.qsec[data-qs="hist"] .qsh b{color:var(--sub)}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}@media(min-width:600px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(min-width:900px){.tiles{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.tile{position:relative;border:1px solid var(--line);border-radius:12px;background:#121a24;padding:9px 9px 7px;min-height:120px;display:flex;flex-direction:column;gap:3px}
+.tile.paused{border-color:#6b5a14;background:#1d1a10}.tile.error{border-color:#6b2a33;background:#211215}
+.tq{align-self:flex-start;font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 7px;background:#16324a;color:#9fd4ff}.tq.tp{background:#3a3110;color:#ffe08a}.tq.te{background:#3a1419;color:#ff9aa6}
+.tt{font-weight:800;color:var(--strong);font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tb{font-size:11.5px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tm{font-size:12.5px;color:#c8d3df}.ta{display:flex;gap:4px;margin-top:auto;padding-top:5px}.ta button{flex:1;min-width:0;border:1px solid var(--line);background:#0e151d;color:var(--txt);border-radius:7px;padding:4px 0;font-size:13px}
+.bt{border:1px solid var(--line);border-radius:14px;margin:10px 0;background:var(--card);overflow:hidden}.bt.run{border-color:#2b6a9c}
 .bth{display:flex;gap:8px;align-items:center;padding:10px 10px 4px;cursor:pointer}.bth b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--strong);font-size:15.5px}
 .bth input{width:20px;height:20px;flex:none}.btar{color:var(--sub);flex:none;transition:transform .15s}.bt.cl .btar{transform:rotate(-90deg)}
 .bti{padding:0 10px 10px}.bti .pb{margin:6px 0}.bti .r2{flex-wrap:wrap}.bwarn{background:#3a2a10;border:1px solid #6b4a14;color:#ffd18a;border-radius:9px;padding:7px 9px;margin-top:6px;font-size:13px}
@@ -524,7 +540,7 @@ ${["running","queued","paused","error"].includes(j.status)?`<button class="pill"
 .pcs{display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap}.pcs input{flex:1;min-width:120px;accent-color:#ffb347}.pcs b{width:42px;text-align:right}.pcs .pill{flex:none;padding:4px 8px}.bacts{display:flex;gap:6px;margin-top:8px}.bacts .pill{flex:1;text-align:center}.bacts .bx{color:#ff6577;border-color:#6b2a33}.cvl{display:flex;gap:8px;align-items:center;margin:5px 0 0}.cvl span{flex:none;width:92px;font-size:12.5px;color:var(--sub)}.cvl .pb{flex:1;margin:0}.cvl b{flex:none;width:44px;text-align:right;font-size:12.5px}
 .cvl.cp .pb u{background:#19b3a6}.cpd em{font-style:normal;color:#45d483;font-size:12.5px}.cpx{font-size:12px;color:var(--sub);margin:2px 0 0 100px}.cpx b{color:#5fe0d4}#bselbar{position:sticky;bottom:8px;z-index:20;display:flex;gap:8px;align-items:center;background:#16324a;border:1px solid #2b6a9c;border-radius:12px;padding:8px 10px;margin:8px 0}#bselbar span{flex:1}</style>`;
   if(BSEL.size)h+=`<div id="bselbar"><span>已選 ${BSEL.size} 個批次</span><button class="pill" data-bset="__sel">⚙ 一起設定</button><button class="pill" data-bsx="1" style="color:#ff6577">✕ 取消選取的批次</button><button class="pill" data-bclr="1">取消選取</button></div>`;
-  for(const b of d.batches){const L=b.jobs.map(x=>byId[x]).filter(Boolean);if(!L.length)continue;
+  const BC=(b,withJobs)=>{const L=b.jobs.map(x=>byId[x]).filter(Boolean);if(!L.length)return "";let h="";
     const cl=col.has(b.id)||(!col.has("o:"+b.id)&&!b.active);
     const t=b.left!=null&&b.active?`剩 ${fd(b.left)}${b.eta_partial?" 以上":""} · 預計 ${fmtClk(b.finish)} 完成`:(b.active?"完成時間估算中":(b.errors?`${b.errors} 支失敗`:"全部完成"));
     const dv=b.drive;
@@ -535,10 +551,32 @@ ${["running","queued","paused","error"].includes(j.status)?`<button class="pill"
 <div class="r2"><span style="word-break:break-all">→ ${esc(b.dest_dir||"")}</span>${dv?`<span>${dv.kind?dv.kind+" · ":""}剩 ${fmtB(Math.max(0,dv.free))}${b.active?` · 全部轉完約剩 <b style="color:${dv.after<15e8?"#ff6577":"var(--strong)"}">${dv.after<0?"不足 "+fmtB(-dv.after):fmtB(dv.after)}</b>`:""}</span>`:""}</div>
 ${b.warn?`<div class="bwarn">${esc(b.warn)}</div>`:""}
 ${b.active||b.errors?`<div class="bacts">${b.active?`<button class="pill" data-ba="pause" data-bid="${esc(b.id)}">⏸ 整批暫停</button>`:""}<button class="pill" data-ba="resume" data-bid="${esc(b.id)}">▶ 整批繼續</button><button class="pill bx" data-ba="cancel" data-bid="${esc(b.id)}">✕ 取消整批</button></div>`:""}</div>
-<div class="btj">${L.map(j=>JC(j,b)).join("")}</div></div>`;}
+${withJobs?`<div class="btj">${L.map(j=>JC(j,b)).join("")}</div>`:""}</div>`;return h;};
+  const bOf={};d.batches.forEach(b=>b.jobs.forEach(x=>bOf[x]=b));
+  const RUN=d.jobs.filter(j=>j.status==="running");
+  const WAIT=d.jobs.filter(j=>["queued","paused","error"].includes(j.status)||(j.status==="running"&&false));
+  const qn={};let k=0;d.jobs.filter(j=>j.status==="queued").forEach(j=>qn[j.id]=++k);
+  const fin=d.all_finish;
+  let hero=`<div class="qhero"><div class="qhh"><b>🎬 正在轉檔</b>${fin?`<span class="qfin">⏱ 預計 <b>${fmtClk(fin.at)}</b> 全部完成 · 剩 ${fd(fin.at-Date.now()/1000)} · ${fin.n} 支</span>`:""}</div>`+
+   (RUN.length?RUN.map(j=>JC(j,bOf[j.id])).join(""):`<div class="snote" style="margin:6px 2px">${WAIT.length?"準備中…":"沒有在轉的影片"}</div>`)+`</div>`;
+  const TJ=j=>{const b=bOf[j.id],jf=b&&b.job_finish[j.id],js=b&&b.job_size[j.id];
+    const st=j.status==="queued"?`<span class="tq">第 ${qn[j.id]} 個</span>`:j.status==="paused"?`<span class="tq tp">⏸ 暫停</span>`:`<span class="tq te">⚠ 失敗</span>`;
+    return `<div class="tile ${j.status}">${st}<div class="tt">${esc(j.title)}</div><div class="tb">📁 ${esc(b?b.title:"")}</div>
+<div class="tm">${jf&&j.status==="queued"?`🕒 ${fmtClk(jf)}`:"🕒 —"}</div><div class="tm">💾 ${js?fmtB(js):"—"}</div>
+<div class="ta">${j.status==="queued"?`<button data-j="${j.id}" data-a="top" title="置頂">⤒</button><button data-j="${j.id}" data-a="up" title="往前">↑</button><button data-j="${j.id}" data-a="down" title="往後">↓</button><button data-j="${j.id}" data-a="pause" title="暫停">⏸</button>`:`<button data-j="${j.id}" data-a="resume" title="${j.status==="error"?"重試":"繼續"}">${j.status==="error"?"↻":"▶"}</button><button data-j="${j.id}" data-a="top" title="置頂">⤒</button>`}<button data-j="${j.id}" data-a="cancel" title="取消">✕</button></div></div>`;};
+  const ACT=d.batches.filter(b=>b.active||b.errors),OLD=d.batches.filter(b=>!b.active&&!b.errors);
+  const sec=(id,title,body,defOpen)=>{const c=bcolGet();const cl=c.has("q:"+id)||(!defOpen&&!c.has("o:q:"+id));
+    return `<div class="qsec${cl?" cl":""}" data-qs="${id}"><div class="qsh" data-qt="${id}"><span class="btar">▾</span><b>${title}</b></div><div class="qsb">${body}</div></div>`;};
+  h+=sec("tiles",`⏳ 排隊中（${WAIT.length} 支）`,WAIT.length?`<div class="tiles">${WAIT.map(TJ).join("")}</div>`:'<div class="snote">沒有排隊的影片</div>',true);
+  if(ACT.length)h+=sec("batches",`📁 進行中的批次（${ACT.length}）`,ACT.map(b=>BC(b,false)).join(""),true);
+  if(OLD.length){const n=OLD.reduce((a,b)=>a+b.n,0);h+=sec("hist",`📜 歷史紀錄（已完成 ${OLD.length} 批、${n} 支）`,OLD.map(b=>BC(b,true)).join(""),false);}
   if(!d.jobs.length)h+='<div class="empty">佇列是空的：到「素材庫」選素材加入</div>';
-  const y=window.scrollY;host.innerHTML=h;window.scrollTo(0,y);
+  const y=window.scrollY;host.innerHTML=h;const hh=document.getElementById("QHERO");if(hh)hh.innerHTML=hero;
+  {const c=bcolGet();const se=host.querySelector('[data-qs="set"]');if(se&&!c.has("o:q:set"))se.classList.add("cl");}
+  window.scrollTo(0,y);
   host.onclick=async e=>{const cb=e.target.closest("input[data-bs]");if(cb){cb.checked?BSEL.add(cb.dataset.bs):BSEL.delete(cb.dataset.bs);viewQueue();return;}
+    const qt=e.target.closest("[data-qt]");if(qt&&!e.target.closest("button")){const id=qt.dataset.qt,el=qt.parentNode,c=bcolGet();const nowCl=!el.classList.contains("cl");el.classList.toggle("cl",nowCl);
+      c.delete("q:"+id);c.delete("o:q:"+id);c.add(nowCl?"q:"+id:"o:q:"+id);bcolSet(c);return;}
     const hd=e.target.closest("[data-bt]");if(hd&&!e.target.closest("button")){const id=hd.dataset.bt,el=hd.parentNode,c=bcolGet();const nowCl=!el.classList.contains("cl");el.classList.toggle("cl",nowCl);
       c.delete(id);c.delete("o:"+id);c.add(nowCl?id:"o:"+id);bcolSet(c);return;}
     const b=e.target.closest("button");if(!b)return;

@@ -2478,10 +2478,10 @@ class QueuePage(QWidget):
         pr.addWidget(self.pace_slider)
         self.pace_val = QLabel(f"{self.pace_slider.value() * 5}%"); self.pace_val.setFixedWidth(44); pr.addWidget(self.pace_val)
         self.pace_now = QLabel(""); self.pace_now.setObjectName("sub"); pr.addWidget(self.pace_now)
-        pr.addWidget(QLabel("　🧪 全部轉完後"))
         self.aft = QComboBox(); [self.aft.addItem(t, k) for k, t in (("none", "不動作"), ("sleep", "睡眠"), ("shutdown", "關機"))]
         self.aft.setToolTip("佇列全部做完（沒有在跑、排隊、暫停的）→ 倒數 60 秒再睡眠／關機；做一次就自動回到「不動作」")
         self.aft.activated.connect(lambda _i: self._aft_set(mode=self.aft.currentData())); pr.addWidget(self.aft)
+        self.aft.setVisible(False)                # (重複：佇列上方原本就有「全部轉完後」，用原本那個)
         self.aft_x = QPushButton("取消倒數"); self.aft_x.setVisible(False); self.aft_x.clicked.connect(lambda: self._aft_set(cancel=True))
         pr.addWidget(self.aft_x)
         pr.addStretch(1)

@@ -369,7 +369,7 @@ def queue_state() -> dict:
         afin = all_finish(list(q.jobs) if q else [])
     except Exception:
         afin = None
-    return {"pace": pst, "hs": hst, "after": aft, "all_finish": afin, "relay_use": ru, "batches": bs["batches"], "drives": bs["drives"], "jobs": jobs_, "after": core.cfg("after_queue") or "none", "relay": relay,
+    return {"pace": pst, "hs": hst, "all_finish": afin, "relay_use": ru, "batches": bs["batches"], "drives": bs["drives"], "jobs": jobs_, "after": core.cfg("after_queue") or "none", "relay": relay,
             "cache_dir": core.cfg("cache_dir") or "", "cache_dir2": core.cfg("cache_dir2") or "",
             "dest": core.cfg("out_folder") if core.cfg("out_folder_mode") == "custom" else ""}
 
