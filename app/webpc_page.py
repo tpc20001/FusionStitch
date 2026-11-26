@@ -451,6 +451,12 @@ document.addEventListener("change",e=>{if(e.target&&e.target.id==="qkHide"){try{
 function finH(f){if(!f)return "";return `<div class="pcbox" style="padding:8px 12px"><b>⏱ 預計 ${fmtClk(f.at)} 全部完成</b> <span class="snote">（剩 ${fd(f.at-Date.now()/1000)}、${f.n} 支${f.partial?"，有幾支還沒有預估":""}）</span></div>`;}
 document.addEventListener("change",async e=>{if(e.target&&e.target.id==="aftSel"){await act("/api/after",{mode:e.target.value});viewQueue();}});
 document.addEventListener("click",async e=>{if(e.target.closest&&e.target.closest("[data-aftx]")){await act("/api/after",{cancel:true});viewQueue();}});
+function dfH(f){if(!f)return "";const W=Object.entries(f.wait||{});
+  return `<div class="pcbox"><div class="pchd"><b>✅ 原檔資料夾轉完自動改名</b><label style="display:flex;gap:6px;align-items:center;margin-left:auto"><input type="checkbox" id="dfOn" ${f.on?"checked":""}>開</label></div>
+<div class="snote">日期資料夾裡的影片全部轉好（沒有失敗）→ 自動改成「20261121-FS DONE」。只改最外層的日期資料夾；100GBACK／100GFRNT 和影片檔名都不動，不刪任何檔案。</div>
+${(f.last||[]).length?`<div class="snote" style="color:#45d483">已改：${f.last.slice(0,5).map(x=>esc(x.new.split(/[\\/]/).pop())).join("、")}</div>`:""}
+${W.length?`<div class="snote" style="color:#ff9f43">${W.slice(0,5).map(([k,v])=>esc(k.split(/[\\/]/).pop())+"："+esc(v)).join("<br>")}</div>`:""}</div>`;}
+document.addEventListener("change",async e=>{if(e.target&&e.target.id==="dfOn"){await act("/api/donefolder",{on:e.target.checked});viewQueue();}});
 function hsH(h){if(!h)return "";const M={alone:"照常跑",lead:"這邊先跑",yield:"讓對方先",split:"照分配"};const P=h.peers||[];const o=h.other||"SortCut";
   const who=P.length?P.map(p=>`${esc(p.name)} V${esc(p.ver)}（${esc(p.what||"閒著")}）`).join("、"):"沒看到 "+esc(o);
   const left=h.boost_until-Date.now()/1000;const sh=Math.round((h.share||50)/10);
@@ -503,7 +509,7 @@ async function viewQueue(){const host=V();if(!S.q)host.innerHTML='<div class="em
 <div class="snote">${run?`▶ #${run.id} ${esc(run.title)} ${(run.progress*100).toFixed(1)}% · ${run.fps.toFixed(1)} fps · 剩 ${fd(run.eta)}`:"閒置"} · 排隊 ${d.jobs.filter(j=>j.status==="queued").length}</div></div>
 <div id="QHERO"></div>
 <div class="qsec" data-qs="set"><div class="qsh" data-qt="set"><span class="btar">▾</span><b>⚙ 速度、握手、中繼 SSD、成品位置</b></div><div class="qsb panel">
-${d.pace?paceH(d.pace):""}${hsH(d.hs)}<div class="r2"><span>💽 中繼 SSD</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir||"不使用")}</b><button class="pill" id="pc" style="flex:none">選擇…</button>${d.cache_dir?'<button class="pill" id="pcx" style="flex:none">不使用</button>':""}</div>
+${d.pace?paceH(d.pace):""}${hsH(d.hs)}${dfH(d.donefolder)}<div class="r2"><span>💽 中繼 SSD</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir||"不使用")}</b><button class="pill" id="pc" style="flex:none">選擇…</button>${d.cache_dir?'<button class="pill" id="pcx" style="flex:none">不使用</button>':""}</div>
 ${d.cache_dir?`<div class="r2" style="margin-top:6px"><span>💽 中繼 2（備援）</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.cache_dir2||"不使用")}</b><button class="pill" id="pc2" style="flex:none">選擇…</button>${d.cache_dir2?'<button class="pill" id="pc2x" style="flex:none">不使用</button>':""}</div>`:""}
 <div class="r2" style="margin-top:6px"><span>📦 成品送到</span><b style="color:var(--strong);flex:1;min-width:0;word-break:break-all">${esc(d.dest||"素材資料夾裡的 stitched")}</b><button class="pill" id="pd" style="flex:none">選擇…</button>${d.dest?'<button class="pill" id="pdx" style="flex:none">回預設</button>':""}</div>
 ${d.relay_use?`<div class="snote">📥 中繼已先存素材：${(d.relay_use.roots||[{drive:"",used:d.relay_use.used,cap:d.relay_use.cap,main:true}]).map(x=>`${esc(x.drive)}${x.main?"（主要）":"（備援）"} ${fmtB(x.used)}${x.cap?" / "+fmtB(x.cap):""}`).join("　")}（正在轉的和下一支一定先存，其他滿了就等）</div>`:""}${d.relay?`<div class="snote">${esc(d.relay)}</div>`:""}</div>`;

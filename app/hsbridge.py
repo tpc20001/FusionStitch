@@ -69,6 +69,11 @@ def state() -> dict:
         outcheck.tick()
     except Exception:
         pass
+    try:                                    # ✅ 原檔資料夾轉完 → 改名「-FS DONE」（每 60 秒，背景）
+        import donefolder
+        donefolder.tick()
+    except Exception:
+        pass
     a = _app()
     q = getattr(a, "_fs_queue", None)
     js = list(getattr(q, "jobs", []) or [])

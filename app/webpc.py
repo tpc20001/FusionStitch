@@ -405,7 +405,12 @@ def queue_state() -> dict:
         afin = all_finish(list(q.jobs) if q else [])
     except Exception:
         afin = None
-    return {"pace": pst, "hs": hst, "all_finish": afin, "relay_use": ru, "batches": bs["batches"], "drives": bs["drives"], "jobs": jobs_, "after": core.cfg("after_queue") or "none", "relay": relay,
+    try:
+        import donefolder
+        dfs = donefolder.status()
+    except Exception:
+        dfs = None
+    return {"pace": pst, "hs": hst, "all_finish": afin, "donefolder": dfs, "relay_use": ru, "batches": bs["batches"], "drives": bs["drives"], "jobs": jobs_, "after": core.cfg("after_queue") or "none", "relay": relay,
             "cache_dir": core.cfg("cache_dir") or "", "cache_dir2": core.cfg("cache_dir2") or "",
             "dest": core.cfg("out_folder") if core.cfg("out_folder_mode") == "custom" else ""}
 
@@ -1180,6 +1185,9 @@ def handle(method: str, path: str, query: dict, body: dict, remote) -> tuple:
         if path == "/api/after":
             import outcheck
             return J(outcheck.after_set(body.get("mode"), bool(body.get("cancel"))))
+        if path == "/api/donefolder":
+            core.set_cfg("src_done_rename", bool(body.get("on")))
+            return J({"ok": True, "message": "原檔資料夾轉完自動改名：" + ("開" if body.get("on") else "關")})
         if path == "/api/hs":
             import hsbridge
             return J(hsbridge.act(body))

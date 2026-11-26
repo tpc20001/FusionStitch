@@ -2517,6 +2517,11 @@ class QueuePage(QWidget):
         hr.addStretch(1)
         l.addLayout(hr)
         self.hs_now = QLabel(""); self.hs_now.setObjectName("sub"); self.hs_now.setWordWrap(True); l.addWidget(self.hs_now)
+        self.df_on = QCheckBox("✅ 原檔資料夾轉完自動改名（20261121 → 20261121-FS DONE）")
+        self.df_on.setToolTip("日期資料夾裡的影片全部轉好、沒有失敗才改；只改最外層的日期資料夾，100GBACK／100GFRNT 和影片檔名都不動，不刪任何檔案")
+        self.df_on.setChecked(cfg("src_done_rename") is not False)
+        self.df_on.toggled.connect(lambda v: set_cfg("src_done_rename", bool(v)))
+        l.addWidget(self.df_on)
         self._hs_busy = False
         self._pace_ui()
         try:

@@ -1,3 +1,4 @@
 [2026-11-17 22:33:15] colortag: t.mp4 -> bt709
 [2026-11-22 01:47:17] outcheck: moved /tmp/claude-0/-home-claude/df820473-d6a8-5c16-bbb2-307d84c6c6d5/scratchpad/oc/bad.mp4 -> /tmp/claude-0/-home-claude/df820473-d6a8-5c16-bbb2-307d84c6c6d5/scratchpad/oc/_問題檔/bad.mp4
 [2026-11-22 01:47:17] colortag: a.mp4 -> bt709
+[2026-11-27 01:57:48] donefolder: /tmp/claude-0/-home-claude/df820473-d6a8-5c16-bbb2-307d84c6c6d5/scratchpad/dfz/20261121 -> /tmp/claude-0/-home-claude/df820473-d6a8-5c16-bbb2-307d84c6c6d5/scratchpad/dfz/20261121-FS DONE
