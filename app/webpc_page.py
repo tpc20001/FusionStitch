@@ -530,6 +530,7 @@ ${["running","queued","paused","error"].includes(j.status)?`<button class="pill"
 .qsec{border:1px solid var(--line);border-radius:14px;margin:10px 0;background:var(--card);overflow:hidden}.qsh{display:flex;gap:8px;align-items:center;padding:11px 12px;cursor:pointer}
 .qsh b{flex:1;color:var(--strong);font-size:15.5px}.qsec.cl .qsb{display:none}.qsec.cl .btar{transform:rotate(-90deg)}.qsb{padding:0 10px 10px}.qsb.panel{margin:0;border:0;border-radius:0}
 .qsec[data-qs="hist"]{opacity:.85}.qsec[data-qs="hist"] .qsh b{color:var(--sub)}
+.bfs{flex:none;font-size:12.5px;padding:4px 9px;margin-left:4px;background:#1a2a3a;border-color:#2b6a9c;color:#cfe8ff}
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}@media(min-width:600px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(min-width:900px){.tiles{grid-template-columns:repeat(5,minmax(0,1fr))}}
 .tile{position:relative;border:1px solid var(--line);border-radius:14px;background:#121a24;padding:0 0 7px;display:flex;flex-direction:column;gap:4px;overflow:hidden;transition:border-color .15s}
 .tile:hover{border-color:#2b6a9c}.tpw{position:relative}.tpic{aspect-ratio:2/1;background:#0a0f15 linear-gradient(90deg,#0d141c,#131c27,#0d141c);overflow:hidden}
@@ -557,7 +558,7 @@ ${["running","queued","paused","error"].includes(j.status)?`<button class="pill"
     const t=b.left!=null&&b.active?`剩 ${fd(b.left)}${b.eta_partial?" 以上":""} · 預計 ${fmtClk(b.finish)} 完成`:(b.active?"完成時間估算中":(b.errors?`${b.errors} 支失敗`:"全部完成"));
     const dv=b.drive;
     const sp=(b.spare_info||[]).map((x,i)=>`<span class="bsp" title="${esc(x.path)}">備用${i+1} ${esc(x.drive.replace("\\",""))}${x.kind?" "+x.kind:""} ✓</span>`).join("");
-    h+=`<div class="bt${b.running?" run":""}${cl?" cl":""}" data-b="${esc(b.id)}"><div class="bth" data-bt="${esc(b.id)}"><input type="checkbox" data-bs="${esc(b.id)}"${BSEL.has(b.id)?" checked":""}><span class="btar">▾</span><b>📁 ${esc(b.title)}</b><span class="chip">${b.done}/${b.n}</span>${sp}<button class="pill bset" data-bset="${esc(b.id)}">⚙</button></div>
+    h+=`<div class="bt${b.running?" run":""}${cl?" cl":""}" data-b="${esc(b.id)}"><div class="bth" data-bt="${esc(b.id)}"><input type="checkbox" data-bs="${esc(b.id)}"${BSEL.has(b.id)?" checked":""}><span class="btar">▾</span><b>📁 ${esc(b.title)}</b><span class="chip">${b.done}/${b.n}</span>${sp}${b.src?(b.src.done?`<span class="bsp" style="background:#173826;color:#7ee2a8">✅ 已加 -FS DONE</span>`:!b.src.exists?`<span class="bsp" style="background:#2a2f37;color:#9aa6b2" title="${esc(b.src.top)}">原檔資料夾不存在</span>`:b.active?"":`<button class="pill bfs" data-fs="${esc(b.folder||"")}" title="原檔資料夾：${esc(b.src.top)}">🏷 加上 -FS DONE</button>`):""}<button class="pill bset" data-bset="${esc(b.id)}">⚙</button></div>
 <div class="bti"><i class="pb"><u style="width:${(b.progress*100).toFixed(1)}%"></u></i>
 <div class="r2"><span><b>${(b.progress*100).toFixed(1)}%</b></span><span>${t}</span><span>成品約 ${fmtB(b.size_total)}${b.size_left>1e8&&b.active?`（還要寫入 ${fmtB(b.size_left)}）`:""}</span></div>
 <div class="r2"><span style="word-break:break-all">→ ${esc(b.dest_dir||"")}</span>${dv?`<span>${dv.kind?dv.kind+" · ":""}剩 ${fmtB(Math.max(0,dv.free))}${b.active?` · 全部轉完約剩 <b style="color:${dv.after<15e8?"#ff6577":"var(--strong)"}">${dv.after<0?"不足 "+fmtB(-dv.after):fmtB(dv.after)}</b>`:""}</span>`:""}</div>
@@ -591,6 +592,13 @@ ${withJobs?`<div class="btj">${L.map(j=>JC(j,b)).join("")}</div>`:""}</div>`;ret
   {const c=bcolGet();const se=host.querySelector('[data-qs="set"]');if(se&&!c.has("o:q:set"))se.classList.add("cl");}
   window.scrollTo(0,y);
   host.onclick=async e=>{const cb=e.target.closest("input[data-bs]");if(cb){cb.checked?BSEL.add(cb.dataset.bs):BSEL.delete(cb.dataset.bs);viewQueue();return;}
+    const fs=e.target.closest("[data-fs]");if(fs){e.stopPropagation();const f=fs.dataset.fs;fs.disabled=true;fs.textContent="檢查中…";
+      const r=await post("/api/donefolder/rename",{folder:f,dry:true});
+      if(!r.exists){toast(r.message||"原檔資料夾不存在");viewQueue();return;}
+      if(r.done){toast(r.message);viewQueue();return;}
+      const msg=`把原檔資料夾\n「${r.name}」\n改名為\n「${r.new_name}」？\n\n${r.ok?"✓ "+r.why:"⚠ "+r.why+"\n（你確認過沒問題的話一樣可以改）"}\n\n只改這個資料夾的名字；裡面的 100GBACK／100GFRNT 和影片都不動。\n位置：${r.top}`;
+      if(!confirm(msg)){viewQueue();return;}
+      const j=await post("/api/donefolder/rename",{folder:f,dry:false,force:!r.ok});toast(j.message||"");viewQueue();return;}
     const qt=e.target.closest("[data-qt]");if(qt&&!e.target.closest("button")){const id=qt.dataset.qt,el=qt.parentNode,c=bcolGet();const nowCl=!el.classList.contains("cl");el.classList.toggle("cl",nowCl);
       c.delete("q:"+id);c.delete("o:q:"+id);c.add(nowCl?"q:"+id:"o:q:"+id);bcolSet(c);return;}
     const hd=e.target.closest("[data-bt]");if(hd&&!e.target.closest("button")){const id=hd.dataset.bt,el=hd.parentNode,c=bcolGet();const nowCl=!el.classList.contains("cl");el.classList.toggle("cl",nowCl);

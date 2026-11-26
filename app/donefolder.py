@@ -123,6 +123,16 @@ def _after(old: str, new: str):
                     j.clip[k] = [new + p[len(old):] if _under(p, old) else p for p in (j.clip.get(k) or [])]
     except Exception:
         pass
+    try:                                              # 批次記的素材資料夾也跟著改（佇列標題、按鈕才對得上）
+        import batches
+        for b in batches._all().values():
+            f = b.get("folder") or ""
+            if _under(f, old):
+                b["folder"] = new + f[len(old):]
+                b["title"] = os.path.basename(b["folder"]) or b.get("title")
+        batches._save()
+    except Exception as e:
+        core.log(f"donefolder: batches update {e}")
     try:
         rec = [new + r[len(old):] if _under(r, old) else r for r in (core.cfg("recent_folders") or [])]
         core.set_cfg("recent_folders", rec)
@@ -141,6 +151,39 @@ def _after(old: str, new: str):
             QTimer.singleShot(0, w, lambda: w.library.scan(nf))        # 畫面執行緒
     except Exception:
         pass
+
+
+def batch_src(folder: str) -> dict:
+    """批次標題列用（便宜：只看資料夾在不在）."""
+    top = top_of(folder or "")
+    name = os.path.basename(top)
+    done = name.endswith(SUFFIX)
+    return {"top": top, "name": name, "exists": bool(top) and os.path.isdir(top), "done": done,
+            "new": name if done else name + SUFFIX, "wait": _S["wait"].get(top, "")}
+
+
+def rename_batch(folder: str, dry: bool = True, force: bool = False) -> dict:
+    """手動（佇列批次上的按鈕）：dry=先看能不能改；force=有原因也照改（使用者自己確認過）."""
+    top = top_of(folder or "")
+    if not top or not os.path.isdir(top):
+        return {"ok": False, "exists": False, "message": "原檔資料夾不存在（可能已經刪掉了）", "top": top}
+    if os.path.basename(top).endswith(SUFFIX):
+        return {"ok": False, "exists": True, "done": True, "message": "已經加過 -FS DONE", "top": top}
+    ok, why = check(top, _jobs())
+    new = top + SUFFIX
+    if dry:
+        return {"ok": ok, "exists": True, "why": why, "top": top, "new": new,
+                "name": os.path.basename(top), "new_name": os.path.basename(new)}
+    if not ok and not force:
+        return {"ok": False, "exists": True, "message": why, "top": top}
+    if os.path.exists(new):
+        return {"ok": False, "exists": True, "message": f"已經有「{os.path.basename(new)}」這個資料夾了", "top": top}
+    r = _rename(top)
+    if not r:
+        return {"ok": False, "exists": True, "message": _S["wait"].get(top, "改不了名"), "top": top}
+    _S["last"] = ([{"old": top, "new": r, "t": time.time()}] + _S["last"])[:20]
+    core.log(f"donefolder: manual{' (force: ' + why + ')' if not ok else ''} {top} -> {r}", "job_log.txt")
+    return {"ok": True, "message": f"已改名：{os.path.basename(r)}", "new": r}
 
 
 def run_once() -> list:

@@ -410,6 +410,12 @@ def queue_state() -> dict:
         dfs = donefolder.status()
     except Exception:
         dfs = None
+    try:
+        import donefolder
+        for b in bs.get("batches") or []:
+            b["src"] = donefolder.batch_src(b.get("folder") or "")
+    except Exception:
+        pass
     return {"pace": pst, "hs": hst, "all_finish": afin, "donefolder": dfs, "relay_use": ru, "batches": bs["batches"], "drives": bs["drives"], "jobs": jobs_, "after": core.cfg("after_queue") or "none", "relay": relay,
             "cache_dir": core.cfg("cache_dir") or "", "cache_dir2": core.cfg("cache_dir2") or "",
             "dest": core.cfg("out_folder") if core.cfg("out_folder_mode") == "custom" else ""}
@@ -1185,6 +1191,9 @@ def handle(method: str, path: str, query: dict, body: dict, remote) -> tuple:
         if path == "/api/after":
             import outcheck
             return J(outcheck.after_set(body.get("mode"), bool(body.get("cancel"))))
+        if path == "/api/donefolder/rename":
+            import donefolder
+            return J(donefolder.rename_batch(str(body.get("folder") or ""), bool(body.get("dry", True)), bool(body.get("force"))))
         if path == "/api/donefolder":
             core.set_cfg("src_done_rename", bool(body.get("on")))
             return J({"ok": True, "message": "原檔資料夾轉完自動改名：" + ("開" if body.get("on") else "關")})
