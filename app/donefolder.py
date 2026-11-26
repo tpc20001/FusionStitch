@@ -67,8 +67,17 @@ def check(top: str, js: list) -> tuple[bool, str]:
     import donemark
     import history
     done_front = {}
+    extra = []
+    try:
+        import outfolders
+        extra = [str(x) for x in outfolders.all_()]
+    except Exception:
+        pass
+
+    def exists(out):                                  # 成品搬到別顆硬碟（例 G:）也算：成品頁清單裡的資料夾有同名檔
+        return os.path.exists(out) or any(os.path.exists(os.path.join(f, os.path.basename(out))) for f in extra)
     for j in mine:
-        if j.status == "done" and j.output and os.path.exists(j.output):
+        if j.status == "done" and j.output and exists(j.output):
             for f in j.clip.get("front") or []:
                 done_front[os.path.normcase(f)] = j.output
     try:
