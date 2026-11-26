@@ -48,54 +48,99 @@ def _under(path: str, top: str) -> bool:
     return a == b or a.startswith(b + os.sep)
 
 
+_DRV = {"t": 0.0, "list": []}
+
+
+def _drives() -> list[str]:
+    if os.name != "nt":
+        return []
+    if time.time() - _DRV["t"] > 60:
+        _DRV.update(t=time.time(), list=[f"{c}:" for c in "CDEFGHIJKLMNOPQRSTUVWXYZ" if os.path.exists(f"{c}:\\")])
+    return _DRV["list"]
+
+
+def resolve(out: str, extra: list) -> str | None:
+    """成品現在在哪：原位置 → 成品頁清單裡的資料夾有同名檔 → 換磁碟代號（例 D:\\A\\B → G:\\A\\B，資料夾層數一樣）."""
+    if not out:
+        return None
+    if os.path.exists(out):
+        return out
+    bn = os.path.basename(out)
+    for f in extra:
+        p = os.path.join(f, bn)
+        if os.path.exists(p):
+            return p
+    if len(out) > 2 and out[1] == ":":
+        for d in _drives():
+            p = d + out[2:]
+            if os.path.exists(p):
+                return p
+    return None
+
+
+def _key(c: dict) -> str:
+    fs = c.get("front") or []
+    return os.path.basename(fs[0]).lower() if fs else ""
+
+
 def check(top: str, js: list) -> tuple[bool, str]:
-    """(可以改, 原因)."""
+    """(可以改, 原因)；每一支沒過的原因放在 _S['detail'][top]."""
+    det = []
+    _S.setdefault("detail", {})[top] = det
     if not os.path.isdir(top):
         return False, "資料夾不見了"
     if os.path.basename(top).endswith(SUFFIX):
         return False, "已經改過"
     mine = [j for j in js if _under(j.clip.get("folder") or "", top)]
-    if not mine:
-        return False, "佇列裡沒有這個資料夾的工作"
     left = [j for j in mine if j.status in ("queued", "running", "paused", "waiting")]
     if left:
         return False, f"還有 {len(left)} 支沒轉完"
-    bad = [j for j in mine if j.status in ("error", "failed")]
-    if bad:
-        return False, f"有 {len(bad)} 支失敗"
     import clips as clips_mod
     import donemark
     import history
-    done_front = {}
     extra = []
     try:
         import outfolders
         extra = [str(x) for x in outfolders.all_()]
     except Exception:
         pass
-
-    def exists(out):                                  # 成品搬到別顆硬碟（例 G:）也算：成品頁清單裡的資料夾有同名檔
-        return os.path.exists(out) or any(os.path.exists(os.path.join(f, os.path.basename(out))) for f in extra)
-    for j in mine:
-        if j.status == "done" and j.output and exists(j.output):
-            for f in j.clip.get("front") or []:
-                done_front[os.path.normcase(f)] = j.output
+    byk = {}
+    for j in mine:                                    # 同一支轉過好幾次：完成的優先
+        k = _key(j.clip)
+        if k and (k not in byk or j.status == "done"):
+            byk[k] = j
     try:
-        cs = [c for c in clips_mod.scan(top) if c.get("kind") == "video" and c.get("complete")]
+        allc = [c for c in clips_mod.scan(top) if c.get("kind") == "video"]
     except Exception as e:
         return False, f"讀不到資料夾：{e}"
+    cs = [c for c in allc if c.get("complete")]
     if not cs:
         return False, "裡面沒有完整的影片"
-    miss = 0
+    hist = donemark._hist()
+    bad = 0
     for c in cs:
-        if any(os.path.normcase(f) in done_front for f in c.get("front") or []):
+        nm = f"GP{c.get('num', '')}（{os.path.basename((c.get('front') or [''])[0])}）"
+        j = byk.get(_key(c))
+        if j is not None and j.status == "done":
+            if resolve(j.output, extra):
+                continue
+            det.append({"clip": nm, "why": "轉好了，但成品找不到（搬走了？）", "path": j.output}); bad += 1; continue
+        if j is not None and j.status in ("error", "failed"):
+            det.append({"clip": nm, "why": "轉檔失敗" + (f"：{j.message}" if getattr(j, "message", "") else ""), "path": ""}); bad += 1; continue
+        hs = hist.get((str(c.get("num") or ""), int(history.source_bytes(c) or 0)), [])
+        if any(resolve(o, extra) for o in hs):
             continue
-        if donemark.find(c, {}, history.source_bytes(c), []):          # 以前就轉過（轉檔紀錄＋成品還在）
-            continue
-        miss += 1
-    if miss:
-        return False, f"還有 {miss} 支沒有成品"
-    return True, f"{len(cs)} 支都轉好了"
+        if hs:
+            det.append({"clip": nm, "why": "轉檔紀錄有，但成品找不到（搬走了？）", "path": hs[0]}); bad += 1; continue
+        if j is not None and j.status == "cancelled":
+            det.append({"clip": nm, "why": "被取消，沒有轉", "path": ""}); bad += 1; continue
+        det.append({"clip": nm, "why": "沒有加入過佇列（當初沒勾到，或那時檔案還不完整）", "path": ""}); bad += 1
+    inc = [c for c in allc if not c.get("complete")]
+    for c in inc:
+        det.append({"clip": f"GP{c.get('num', '')}", "why": "檔案不完整（缺前或後鏡頭），不算", "path": "", "info": True})
+    if bad:
+        return False, f"{len(cs)} 支裡有 {bad} 支沒有確認到成品"
+    return True, f"{len(cs)} 支都轉好了" + (f"（另有 {len(inc)} 支不完整的不算）" if inc else "")
 
 
 def _rename(top: str) -> str | None:
@@ -172,7 +217,7 @@ def rename_batch(folder: str, dry: bool = True, force: bool = False) -> dict:
     ok, why = check(top, _jobs())
     new = top + SUFFIX
     if dry:
-        return {"ok": ok, "exists": True, "why": why, "top": top, "new": new,
+        return {"ok": ok, "exists": True, "why": why, "top": top, "new": new, "detail": list(_S.get("detail", {}).get(top, [])),
                 "name": os.path.basename(top), "new_name": os.path.basename(new)}
     if not ok and not force:
         return {"ok": False, "exists": True, "message": why, "top": top}
@@ -200,7 +245,7 @@ def run_once() -> list:
             continue
         ok, why = check(t, js)
         if not ok:
-            if "失敗" in why or "沒有成品" in why:
+            if "沒有確認到成品" in why:
                 _S["wait"][t] = why
             else:
                 _S["wait"].pop(t, None)

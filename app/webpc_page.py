@@ -596,9 +596,7 @@ ${withJobs?`<div class="btj">${L.map(j=>JC(j,b)).join("")}</div>`:""}</div>`;ret
       const r=await post("/api/donefolder/rename",{folder:f,dry:true});
       if(!r.exists){toast(r.message||"原檔資料夾不存在");viewQueue();return;}
       if(r.done){toast(r.message);viewQueue();return;}
-      const msg=`把原檔資料夾\n「${r.name}」\n改名為\n「${r.new_name}」？\n\n${r.ok?"✓ "+r.why:"⚠ "+r.why+"\n（你確認過沒問題的話一樣可以改）"}\n\n只改這個資料夾的名字；裡面的 100GBACK／100GFRNT 和影片都不動。\n位置：${r.top}`;
-      if(!confirm(msg)){viewQueue();return;}
-      const j=await post("/api/donefolder/rename",{folder:f,dry:false,force:!r.ok});toast(j.message||"");viewQueue();return;}
+      fsSheet(f,r);return;}
     const qt=e.target.closest("[data-qt]");if(qt&&!e.target.closest("button")){const id=qt.dataset.qt,el=qt.parentNode,c=bcolGet();const nowCl=!el.classList.contains("cl");el.classList.toggle("cl",nowCl);
       c.delete("q:"+id);c.delete("o:q:"+id);c.add(nowCl?"q:"+id:"o:q:"+id);bcolSet(c);return;}
     const hd=e.target.closest("[data-bt]");if(hd&&!e.target.closest("button")){const id=hd.dataset.bt,el=hd.parentNode,c=bcolGet();const nowCl=!el.classList.contains("cl");el.classList.toggle("cl",nowCl);
@@ -818,6 +816,19 @@ async function ctWatch(){for(;;){await new Promise(r=>setTimeout(r,1000));let d;
   if(d.busy){el.textContent=`補標記中 ${d.done}/${d.total}：${d.cur}`;continue;}
   el.innerHTML=`✔ 完成：成功 ${d.ok.length} 支`+(d.fail.length?`，失敗 ${d.fail.length} 支<br>`+d.fail.map(esc).join("<br>"):"（重新上傳 YouTube 顏色就會正確）");const g=$("#ctGo");if(g)g.hidden=true;return;}}
 const QDSEL=new Set();
+function fsSheet(f,r){const D=r.detail||[];const bad=D.filter(x=>!x.info),inf=D.filter(x=>x.info);
+  const g={};bad.forEach(x=>{(g[x.why]=g[x.why]||[]).push(x);});
+  let m=document.getElementById("fsm");if(m)m.remove();m=document.createElement("div");m.className="lvm";m.id="fsm";
+  m.innerHTML=`<div><button class="lvx" data-fsx="1">✕</button><h3>🏷 加上 -FS DONE</h3>
+<div style="margin:6px 0">原檔資料夾 <b>${esc(r.name)}</b> → <b style="color:#7ee2a8">${esc(r.new_name)}</b></div><div class="lvmu" style="word-break:break-all">${esc(r.top)}</div>
+<div style="margin:10px 0;font-weight:700;color:${r.ok?"#45d483":"#ff9f43"}">${r.ok?"✓":"⚠"} ${esc(r.why)}</div>
+${Object.entries(g).map(([w,L])=>`<div style="margin:8px 0"><b style="color:#ffb347">${esc(w)}：${L.length} 支</b><div class="lvmu" style="max-height:30vh;overflow:auto">${L.map(x=>`${esc(x.clip)}${x.path?`<br><small style="opacity:.75;word-break:break-all">${esc(x.path)}</small>`:""}`).join("<br>")}</div></div>`).join("")}
+${inf.length?`<div class="lvmu" style="margin:6px 0">ℹ 不完整（缺前或後鏡頭）不算：${inf.map(x=>esc(x.clip)).join("、")}</div>`:""}
+<p class="lvmu">只改這個資料夾的名字；裡面的 100GBACK／100GFRNT 和影片都不動、不刪。${r.ok?"":"上面列的你確認過沒問題，一樣可以改。"}</p>
+<div style="display:flex;gap:8px"><button class="pill" data-fsx="1" style="flex:1">先不要</button><button class="pill" data-fsgo="1" style="flex:1;background:${r.ok?"#1d4d33":"#4d3a12"}">${r.ok?"改名":"我確認過，照改"}</button></div></div>`;
+  document.body.appendChild(m);
+  m.onclick=async e=>{if(e.target===m||e.target.closest("[data-fsx]")){m.remove();viewQueue();return;}
+    if(e.target.closest("[data-fsgo]")){const j=await post("/api/donefolder/rename",{folder:f,dry:false,force:!r.ok});toast(j.message||"");m.remove();viewQueue();}};}
 /* ================= 🤝 右上角 Lv 1～10（跟 SortCut、ComfyRemote 一樣的介面） ================= */
 let LVV=null;const LVCOL=l=>l>=8?"#2ecc71":l>=5?"#f1c40f":l>=3?"#ff9f43":"#ff6b6b";
 function lvSet(v){LVV=v;const el=$("#lvb");if(!el)return;const on=v.on!==false,l=v.lv||10;el.classList.toggle("off",!on);el.style.setProperty("--lc",LVCOL(l));
