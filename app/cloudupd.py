@@ -5,12 +5,7 @@ background. A newer version is only announced: nothing is downloaded until you p
 
 * Only the program changed → FS_V<ver>_Update.zip is downloaded (background, rate-limited,
   SHA-256 checked) and installed with the normal hot update: conversions keep running.
-* The EXE (launcher) has to change (update.json "launcher" > FS_LAUNCHER of the running EXE):
-  the running / queued conversions are listed first and waiting for them is recommended; when you
-  insist, FS_Shell_L<n>.zip is downloaded, a small BAT waits until FusionStitch has closed, swaps
-  FusionStitch.exe + _internal, starts the new EXE and waits for it to report a good start
-  (UPDATE\\shell_ok.flag). If the swap or the start fails, the old EXE comes back and starts.
-  Conversions continue where they stopped (the queue resumes after every start).
+* 換 EXE 已經停用（使用者 2026-11-19 決定只熱更新；雲端打包會先用使用者現在的 EXE 測過新程式）.
 Everything is written to LOG\\update_log.txt.
 """
 from __future__ import annotations
@@ -312,51 +307,17 @@ def update(force: bool = False) -> dict:
     R["newer"] = R["newer_code"] or R["need_shell"]
     if not R["newer"]:
         return {"ok": False, "message": f"已經是最新 V{core.APP_VERSION}"}
-    if R["need_shell"]:
-        if not getattr(sys, "frozen", False):
-            return {"ok": False, "message": "這不是 EXE 執行的（原始碼模式），不能換 EXE"}
-        busy = busy_jobs()
-        if busy and not force:
-            run = [b for b in busy if b["status"] == "running"]
-            return {"ok": False, "need_confirm": True, "busy": busy,
-                    "message": f"這次要換 EXE，程式會關掉再自動打開（約 1～2 分鐘）。現在 {len(run)} 支正在轉、"
-                               f"{len(busy) - len(run)} 支在排隊："
-                               + "、".join(f"#{b['id']} {b['title']}" + (f"（{b['progress'] * 100:.0f}%）" if b['status'] == 'running' else '')
-                                          for b in busy[:10]) + ("…" if len(busy) > 10 else "")
-                               + "。建議等轉完再更新；堅持現在更新的話，正在轉的會暫停，開起來從中斷處接著轉（已轉好的部分不重做）。"}
     st.update(busy=True, cancel=False, msg="下載中…")
 
     def run():
         _low_priority_thread()
         try:
-            if R["need_shell"] and R["newer_code"]:
-                # the program first (hot update, conversions keep going): the new program then swaps the EXE with its
-                # own, newest swap code when you press 「更新」 again
-                zp = _download(info["zip"], CLOUD_DIR() / f"FS_V{info['version']}_Update.zip",
-                               info.get("zip_sha256"), info.get("zip_size"), f"程式 V{info['version']}")
-                st["msg"] = f"先熱更新程式到 V{info['version']}（轉檔不中斷）；好了之後再按一次「更新」換 EXE"
-                log(f"V{core.APP_VERSION} → V{info['version']}：先熱更新程式，之後再換 EXE")
-                _ui(lambda p=str(zp): _hot(p))
-                st["busy"] = False
-            elif R["need_shell"]:
-                # NOT into UPDATE: an older launcher would treat every zip there as a program update
-                sz = _download(info["shell"], CLOUD_DIR() / f"FS_Shell_L{info.get('launcher')}.zip", info.get("shell_sha256"),
-                               info.get("shell_size"), f"EXE 第 {info.get('launcher')} 版")
-                log(f"EXE 第 {info.get('launcher')} 版下載好了（SHA-256 對過），準備換 EXE")
-                nd = None
-                if int(info.get("launcher") or 1) >= 3:          # the new EXE can swap itself in (no BAT)
-                    st["msg"] = "解壓縮新的 EXE…"
-                    nd = _extract(sz)
-                    log(f"新的 EXE 解壓縮好了：{nd}")
-                st["msg"] = "準備換 EXE（程式會關掉再自動打開）"
-                _ui(lambda p=str(sz), d=(str(nd) if nd else ""): swap_exe(p, d))
-            else:
-                zp = _download(info["zip"], CLOUD_DIR() / f"FS_V{info['version']}_Update.zip",
-                               info.get("zip_sha256"), info.get("zip_size"), f"程式 V{info['version']}")
-                st["msg"] = f"下載好了（SHA-256 對過），熱更新到 V{info['version']}…"
-                log(f"V{core.APP_VERSION} → V{info['version']}（熱更新，轉檔不中斷）")
-                _ui(lambda p=str(zp): _hot(p))
-                st["busy"] = False
+            zp = _download(info["zip"], CLOUD_DIR() / f"FS_V{info['version']}_Update.zip",
+                           info.get("zip_sha256"), info.get("zip_size"), f"程式 V{info['version']}")
+            st["msg"] = f"下載好了（SHA-256 對過），熱更新到 V{info['version']}…"
+            log(f"V{core.APP_VERSION} → V{info['version']}（熱更新，轉檔不中斷）")
+            _ui(lambda p=str(zp): _hot(p))
+            st["busy"] = False
         except Exception as ex:
             st["busy"] = False
             st["msg"] = f"更新失敗：{ex}"
@@ -364,8 +325,7 @@ def update(force: bool = False) -> dict:
         finally:
             st["dl"] = None
     threading.Thread(target=run, name="FSCloudDl", daemon=True).start()
-    return {"ok": True, "message": "開始下載（背景），好了會自動更新" +
-            ("；要換 EXE，程式會關掉再自動打開" if R["need_shell"] else "，轉檔不中斷")}
+    return {"ok": True, "message": "開始下載（背景），好了會自動熱更新，轉檔不中斷"}
 
 
 def _ui(fn):
@@ -388,8 +348,6 @@ def skip() -> dict:
     v = (R.get("info") or {}).get("version")
     if not v:
         return {"ok": False, "message": "沒有可以略過的版本"}
-    if R.get("need_shell"):
-        return {"ok": False, "message": "要換 EXE 的版本不能略過（之後的更新都需要新 EXE）"}
     _store(skip=v)
     R["skipped"] = True
     log(f"略過 V{v}")
@@ -419,201 +377,24 @@ def status() -> dict:
             "dl": {k: dl.get(k) for k in ("label", "got", "size", "spd")} if dl else None,
             "chk": {k: c.get(k) for k in ("ok", "newer", "need_shell", "newer_code", "skipped", "t", "message")} if c else None,
             "ver": I.get("version"), "date": I.get("date"), "notes": I.get("notes") or [],
-            "busy_jobs": busy_jobs() if c.get("need_shell") else []}
-
-
-# ---------------------------------------------------------------- EXE swap
-def _bat(shell_zip: str, pid: int) -> Path:
-    root = core.ROOT
-    okf = core.UPDATE_DIR / "shell_ok.flag"
-    bat = CLOUD_DIR() / "shell_update.bat"
-    tmp = CLOUD_DIR() / "shell_new"
-    logf = core.LOG_DIR / "update_log.txt"
-    q = lambda p: str(p).replace("%", "%%")
-    R_, T_, Z_, O_ = q(root), q(tmp), q(shell_zip), q(okf)
-    s = f"""@echo off
-chcp 65001 >nul
-title FusionStitch 換 EXE（這個視窗會自己關掉）
-set "LOGF={q(logf)}"
-call :L 開始：等 FusionStitch（PID {int(pid)}）關掉
-set /a N=0
-:wait
-tasklist /FI "PID eq {int(pid)}" /NH 2>nul | find "{int(pid)}" >nul || goto closed
-set /a N+=1
-if %N% GTR 60 goto kill
-timeout /t 1 /nobreak >nul
-goto wait
-:kill
-call :L 等了 60 秒還沒關，強制結束 PID {int(pid)}
-taskkill /F /T /PID {int(pid)} >nul 2>&1
-timeout /t 5 /nobreak >nul
-tasklist /FI "PID eq {int(pid)}" /NH 2>nul | find "{int(pid)}" >nul && (call :L 程式關不掉，這次不換 EXE & exit /b 1)
-:closed
-call :L 程式已經關了
-timeout /t 3 /nobreak >nul
-if exist "{T_}" rmdir /s /q "{T_}"
-mkdir "{T_}"
-call :L 解壓縮 {Z_}
-tar -xf "{Z_}" -C "{T_}" >nul 2>&1
-if not exist "{T_}\\{EXE}" (call :L tar 解不開，改用 PowerShell & powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath '{Z_}' -DestinationPath '{T_}' -Force")
-if not exist "{T_}\\{EXE}" (call :L 解壓縮失敗：找不到 {EXE} & goto fail)
-if not exist "{T_}\\_internal" (call :L 解壓縮失敗：找不到 _internal & goto fail)
-if exist "{R_}\\_internal_old" rmdir /s /q "{R_}\\_internal_old"
-if exist "{R_}\\{EXE}.old" del /f /q "{R_}\\{EXE}.old"
-if exist "{R_}\\_internal" move "{R_}\\_internal" "{R_}\\_internal_old" >nul
-if exist "{R_}\\_internal" (call :L 舊的 _internal 搬不走（有檔案被占用） & goto restore)
-move "{R_}\\{EXE}" "{R_}\\{EXE}.old" >nul
-if exist "{R_}\\{EXE}" (call :L 舊的 {EXE} 搬不走 & goto restore)
-call :L 舊的已改名備份，複製新的檔案
-robocopy "{T_}" "{R_}" /E /R:3 /W:2 /NFL /NDL /NJH /NJS /NP >nul
-set RC=%ERRORLEVEL%
-if %RC% GEQ 8 (call :L 複製新檔案失敗（robocopy %RC%） & goto restore)
-if not exist "{R_}\\{EXE}" (call :L 新的 {EXE} 不在 & goto restore)
-if not exist "{R_}\\_internal" (call :L 新的 _internal 不在 & goto restore)
-call :L 檔案換好了，打開新的 EXE、等它回報開成功（最多 3 分鐘）
-rmdir /s /q "{T_}"
-if exist "{O_}" del /f /q "{O_}"
-start "" /D "{R_}" "{R_}\\{EXE}"
-set /a K=0
-:chk
-timeout /t 3 /nobreak >nul
-if exist "{O_}" goto good
-set /a K+=1
-if %K% GTR 60 goto slow
-tasklist /FI "IMAGENAME eq {EXE}" /NH 2>nul | find /I "{EXE}" >nul && goto chk
-call :L 新的 EXE 開不起來（自己關掉了），換回舊的
-goto restore
-:good
-call :L 成功：新的 EXE 開起來了，刪掉舊的備份
-del /f /q "{O_}"
-if exist "{R_}\\_internal_old" rmdir /s /q "{R_}\\_internal_old"
-if exist "{R_}\\{EXE}.old" del /f /q "{R_}\\{EXE}.old"
-exit /b 0
-:slow
-call :L 新的 EXE 還在跑但 3 分鐘沒回報，先留著舊的備份（_internal_old、{EXE}.old）
-exit /b 0
-:restore
-call :L 換回舊的 EXE
-taskkill /F /IM {EXE} >nul 2>&1
-timeout /t 2 /nobreak >nul
-if exist "{R_}\\_internal_old" (if exist "{R_}\\_internal" rmdir /s /q "{R_}\\_internal")
-if exist "{R_}\\_internal_old" move "{R_}\\_internal_old" "{R_}\\_internal" >nul
-if exist "{R_}\\{EXE}.old" (if exist "{R_}\\{EXE}" del /f /q "{R_}\\{EXE}")
-if exist "{R_}\\{EXE}.old" move "{R_}\\{EXE}.old" "{R_}\\{EXE}" >nul
-:fail
-call :L 沒有換成，用原本的 EXE 打開
-if exist "{T_}" rmdir /s /q "{T_}"
-tasklist /FI "IMAGENAME eq {EXE}" /NH 2>nul | find /I "{EXE}" >nul && exit /b 1
-start "" /D "{R_}" "{R_}\\{EXE}"
-exit /b 1
-:L
-echo [%date% %time%] [換 EXE] %*
-echo [%date% %time%] [換 EXE] %* >> "%LOGF%"
-exit /b 0
-"""
-    bat.parent.mkdir(parents=True, exist_ok=True)
-    logf.parent.mkdir(parents=True, exist_ok=True)
-    bat.write_text(s, encoding="utf-8")
-    return bat
-
-
-def _extract(shell_zip) -> Path:
-    """Unpack the EXE package into Package\\cloud\\shell_new (background thread, before anything closes)."""
-    import shutil
-    import zipfile
-    nd = CLOUD_DIR() / "shell_new"
-    shutil.rmtree(nd, ignore_errors=True)
-    nd.mkdir(parents=True)
-    with zipfile.ZipFile(shell_zip) as zf:
-        for m in zf.namelist():
-            if ".." in Path(m).parts or Path(m).is_absolute():
-                raise OSError(f"EXE 壓縮檔裡有不安全的路徑：{m}")
-        zf.extractall(nd)
-    if not (nd / EXE).exists() or not (nd / "_internal").is_dir():
-        raise OSError("EXE 壓縮檔不完整（找不到 FusionStitch.exe 或 _internal）")
-    return nd
-
-
-def swap_exe(shell_zip: str, new_dir: str = ""):
-    """Qt thread: start the swapper (the new EXE itself, or a BAT for older EXE packages), note what was
-    running, close FusionStitch (no questions)."""
-    st = _st()
-    try:
-        bat = None if new_dir else _bat(shell_zip, os.getpid())
-        busy = busy_jobs()
-        (core.PACKAGE_DIR / "resume_after_update.json").write_text(
-            json.dumps({"t": time.time(), "busy": busy, "from": core.APP_VERSION, "launcher": launcher(), "why": "cloud_shell"},
-                       ensure_ascii=False), encoding="utf-8")
-        log(f"換 EXE：程式先關掉（{len(busy)} 支轉檔中／排隊，開起來從中斷處接著轉）")
-        if new_dir and os.name == "nt":
-            sp = subprocess.Popen([str(Path(new_dir) / EXE), "--fs-swap", "--root", str(core.ROOT), "--pid", str(os.getpid())],
-                                  cwd=new_dir, close_fds=True, creationflags=0x00000008 | 0x00000200)   # DETACHED | NEW_GROUP
-            st.setdefault("keep_pids", []).append(sp.pid)   # closing FusionStitch kills its child processes: not this one
-            log("換 EXE：新的 EXE 會自己換上去（不用 BAT），程式關掉中")
-        elif os.name == "nt":
-            si = subprocess.STARTUPINFO()
-            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            si.wShowWindow = 7                                # minimized, not focused: you can watch it in the taskbar
-            bp = subprocess.Popen(["cmd", "/c", str(bat)], startupinfo=si, close_fds=True,
-                                  creationflags=0x00000010 | 0x00000200)   # NEW_CONSOLE | NEW_PROCESS_GROUP (keeps running after we close)
-            st.setdefault("keep_pids", []).append(bp.pid)
-        st["msg"] = "換 EXE 中：程式會關掉再自動打開（約 1～2 分鐘）"
-        if not new_dir:
-            log("換 EXE：BAT 已啟動，程式關掉中")
-
-        def _hard_exit():                                     # leftover threads must not keep the process (and the old EXE) alive
-            time.sleep(12)
-            log("換 EXE：程式 12 秒內沒有自己結束，強制結束")
-            os._exit(0)
-        threading.Thread(target=_hard_exit, daemon=True, name="FSSwapExit").start()
-        from PySide6.QtWidgets import QApplication
-        w = getattr(QApplication.instance(), "_fs_window", None)
-        if w is not None:
-            w.quit_app(force=True)
-        else:
-            QApplication.instance().quit()
-    except Exception as ex:
-        st["busy"] = False
-        st["msg"] = f"換 EXE 準備失敗（程式沒關）：{ex}"
-        log(f"換 EXE 準備失敗（程式照常執行）：{ex}")
+            "busy_jobs": []}
 
 
 def after_start(win):
-    """Called once the window is up: report a good start to the swap BAT, announce a finished EXE swap."""
-    from PySide6.QtCore import QTimer
-
-    def ok():
-        try:
-            (core.UPDATE_DIR / "shell_ok.flag").write_text(str(time.time()), encoding="utf-8")
-        except OSError:
-            pass
-        p = core.PACKAGE_DIR / "resume_after_update.json"
-        if p.exists():
-            try:
-                d = json.loads(p.read_text(encoding="utf-8"))
-            except Exception:
-                d = {}
-            p.unlink(missing_ok=True)
-            done = launcher() > int(d.get("launcher") or 1)
-            m = ((f"換 EXE 完成：啟動器第 {d.get('launcher') or 1} 版 → 第 {launcher()} 版、V{core.APP_VERSION}" if done else
-                  f"換 EXE 沒有完成：還是啟動器第 {launcher()} 版（原因寫在 LOG\\update_log.txt 的「[換 EXE]」）")
-                 + (f"；{len(d.get('busy') or [])} 支轉檔從中斷處接著轉" if d.get("busy") else ""))
-            log(m)
-            try:
-                win.toast("☁ " + m, 15000)
-            except Exception:
-                pass
-    QTimer.singleShot(15000, ok)
-    def _clean_new():
+    """Called once the window is up: start the background checks; tidy files left by the old EXE-swap code
+    (換 EXE 已經停用：使用者 2026-11-19 決定只熱更新)."""
+    def tidy():
         import shutil
-        shutil.rmtree(CLOUD_DIR() / "shell_new", ignore_errors=True)   # (a swapper is long finished after 4 minutes)
-    QTimer.singleShot(240000, _clean_new)
-    # an EXE package left in UPDATE by V2.19.0 would make an older launcher complain at every start: move it away
-    for d in (core.UPDATE_DIR, core.UPDATE_DIR / "failed"):
+        shutil.rmtree(CLOUD_DIR() / "shell_new", ignore_errors=True)
+        for d in (core.UPDATE_DIR, core.UPDATE_DIR / "failed"):
+            try:
+                for z in d.glob("FS_Shell_*.zip"):
+                    os.replace(z, CLOUD_DIR() / z.name)
+            except OSError:
+                pass
         try:
-            for z in d.glob("FS_Shell_*.zip"):
-                os.replace(z, CLOUD_DIR() / z.name)
-                log(f"把 {z.name} 從 {d.name} 移到 Package\\cloud（EXE 壓縮檔不該放在 UPDATE）")
+            (core.UPDATE_DIR / "shell_ok.flag").write_text(str(time.time()), encoding="utf-8")   # (L3 啟動器看這個)
         except OSError:
             pass
+    threading.Thread(target=tidy, daemon=True, name="cloud-tidy").start()
     start_loop()
