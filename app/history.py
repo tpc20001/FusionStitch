@@ -24,6 +24,24 @@ _lock = threading.Lock()
 _cache: list | None = None
 
 
+_ver = [0]                    # 每加一筆 +1：下面算好的統計就失效
+_memo: dict = {}
+
+
+def _memoize(fn):
+    """紀錄沒變就重用上次的結果（手機、電腦每秒都會問，原本每次都把幾千筆重算一次）."""
+    def w(*a):
+        k = (fn.__name__, a, _ver[0])
+        if k not in _memo:
+            if len(_memo) > 500:
+                _memo.clear()
+            _memo[k] = fn(*a)
+        return _memo[k]
+    w.__name__ = fn.__name__
+    w.__doc__ = fn.__doc__
+    return w
+
+
 # ---------------------------------------------------------------- storage
 def records() -> list:
     global _cache
@@ -41,6 +59,7 @@ def records() -> list:
 def add(rec: dict):
     records()
     with _lock:
+        _ver[0] += 1
         _cache.append(rec)
         del _cache[:-MAX]
         try:
@@ -83,6 +102,7 @@ def saving_text(src: int, out: int) -> str:
 
 
 # ---------------------------------------------------------------- speed from past jobs
+@_memoize
 def _similar(ow: int, step: int, preset: str | None):
     rs = [r for r in records() if r.get("fps") and r.get("frames", 0) > 200 and not r.get("throttled")]
     for f in (lambda r: r.get("ow") == ow and r.get("step") == step and r.get("preset") == preset,
@@ -95,6 +115,7 @@ def _similar(ow: int, step: int, preset: str | None):
     return []
 
 
+@_memoize
 def prior(ow: int, step: int, preset: str | None) -> dict:
     """Expected frame-loop speed (frames / s), preparation time (s) and finishing time per output
     second, from up to 30 similar past jobs (weighted towards the recent ones), plus how many."""
@@ -222,6 +243,7 @@ def schedule(jobs_list) -> dict:
 
 
 # ---------------------------------------------------------------- output size from past jobs
+@_memoize
 def ratio_stats(preset: str | None) -> dict:
     """Output size / original size of past normal-speed jobs with this preset (newest 200):
     {"n", "mid", "lo", "hi"} (median, 10th and 90th percentile), or n = 0."""
@@ -286,6 +308,7 @@ def _out_seconds(j) -> float:
     return d
 
 
+@_memoize
 def phase_model(ow: int, step: int, preset: str | None) -> dict:
     """{"prep": (base, per_s), "fin": (base, per_s), "n"} from past jobs that recorded their stages."""
     rs = [r for r in records() if r.get("fin") is not None and r.get("prep2") is not None and (r.get("duration") or 0) > 10
