@@ -2858,6 +2858,9 @@ class PerfPage(QWidget):
         l.addWidget(self.note)
         l.addStretch()
 
+    _dinfo: dict = {}
+    _dinfo_t = 0.0
+
     def refresh(self, data, hist):
         g = data.get("gpu") or {}
         s = perf_sampler()
@@ -2887,16 +2890,22 @@ class PerfPage(QWidget):
                 self.disk_cards[letter] = c
             c.value_label.setText(f"讀 {d['read'] / 1048576:.0f}  寫 {d['write'] / 1048576:.0f} MB/s")
             c.spark.set_values(hist.get("disk_" + letter, []))
-            if time.time() - getattr(c, "_cap_t", 0) > 30:          # 容量 30 秒更新一次
-                c._cap_t = time.time()
+            di = self._dinfo.get(letter)
+            if di:
+                head = " · ".join(x for x in (di.get("label") or "", di.get("kind") or "") if x)
+                cap = f"剩 {fmt_bytes(di['free'])} / {fmt_bytes(di['total'])}" if di.get("total") else ""
+                c.title_label.setText(f"磁碟 {letter}:　{head}　{cap}".rstrip())
+        if time.time() - self._dinfo_t > 30 and data.get("disks"):     # 容量 30 秒查一次，在背景（第一次要問 Windows，會花幾秒）
+            self._dinfo_t = time.time()
+            letters = list(data["disks"].keys())
+
+            def look():
                 try:
                     import disks
-                    di = disks.info(f"{letter}:\\")
-                    head = " · ".join(x for x in (di.get("label") or "", di.get("kind") or "") if x)
-                    cap = f"剩 {fmt_bytes(di['free'])} / {fmt_bytes(di['total'])}" if di.get("total") else ""
-                    c.title_label.setText(f"磁碟 {letter}:　{head}　{cap}".rstrip())
+                    self._dinfo = {L: disks.info(f"{L}:\\") for L in letters}
                 except Exception:
                     pass
+            threading.Thread(target=look, daemon=True, name="perf-disks").start()
 
 
 # ======================================================================== settings page
