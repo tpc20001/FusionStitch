@@ -15,7 +15,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFrame, QHBoxLayout, QHeaderView, QLabel, QListWidget,
-                               QListWidgetItem, QProgressBar, QPushButton, QSplitter, QTableWidget, QTableWidgetItem,
+                               QListWidgetItem, QPushButton, QSplitter, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
 
 import core
@@ -228,12 +228,13 @@ class QuickPage(QWidget):
         row.addWidget(self.go_btn)
         l3.addLayout(row)
         rl.addWidget(c3)
-        # ---- ④ now converting
-        c4, l4 = card("④ 轉檔中")
-        self.jobs = QVBoxLayout(); self.jobs.setSpacing(6); l4.addLayout(self.jobs)
-        self.idle = QLabel("目前沒有轉檔工作"); self.idle.setObjectName("sub"); l4.addWidget(self.idle)
-        l4.addStretch(1)
-        rl.addWidget(c4, 2)
+        # ---- 🎬 轉檔中：一行摘要（詳細在轉檔佇列），點一下過去
+        self.sum_btn = QPushButton(""); self.sum_btn.setObjectName("qsum")
+        self.sum_btn.setStyleSheet("QPushButton#qsum{text-align:left;padding:10px 14px;border:1.5px solid #2b8ad8;border-radius:12px;"
+                                   "background:#0f2436;color:#cfe8ff;font-size:14px}")
+        self.sum_btn.clicked.connect(lambda: self.main.go(2))           # PAGE_QUEUE
+        rl.insertWidget(0, self.sum_btn)
+        rl.addStretch(1)
         split.addWidget(right)
         split.setSizes([380, 900])
         outer.addWidget(split, 1)
@@ -643,38 +644,26 @@ class QuickPage(QWidget):
 
     # ---------------------------------------------------------------- jobs
     def _tick(self):
+        """🎬 一行摘要：只改文字，不再每秒重建一堆元件."""
         if not self.isVisible():
             return
         from PySide6.QtWidgets import QApplication
         q = getattr(QApplication.instance(), "_fs_queue", None)
-        act = [j for j in (q.jobs if q else []) if j.status in ("running", "queued", "paused")]
-        while self.jobs.count():
-            w = self.jobs.takeAt(0).widget()
-            if w:
-                w.deleteLater()
-        self.idle.setVisible(not act)
-        import history
-        sched = history.schedule(act)
-        for j in act:
-            box = QFrame(); bl = QVBoxLayout(box); bl.setContentsMargins(0, 2, 0, 2); bl.setSpacing(3)
-            top = QHBoxLayout()
-            name = QLabel(f"<b>{j.title}</b>　<span style='color:#8994a4'>{os.path.basename(j.output or '')}</span>")
-            top.addWidget(name, 1)
-            fin = sched.get(j.id)
-            if j.status == "running":
-                if getattr(j, "eta_at", None) and fin:
-                    txt = f"預計 {datetime.fromtimestamp(fin).strftime('%H:%M')} 完成（剩 {fmt_dur(max(0, fin - time.time()))}）"
-                else:
-                    txt = "準備中（分析、對齊）…"
-                info = QLabel(txt); info.setStyleSheet("color:#45d483;font-weight:800"); top.addWidget(info)
-            else:
-                txt = ("排隊中" + (f" · 預計 {datetime.fromtimestamp(fin).strftime('%H:%M')} 完成" if fin else "")) \
-                    if j.status == "queued" else "已暫停"
-                info = QLabel(txt); info.setObjectName("sub"); top.addWidget(info)
-            bl.addLayout(top)
-            if j.status == "running":
-                bar = QProgressBar(); bar.setRange(0, 1000); bar.setValue(int(j.progress * 1000)); bar.setTextVisible(False)
-                bar.setFixedHeight(10); bl.addWidget(bar)
-                sub = QLabel(f"{j.progress * 100:.1f}%　{j.fps:.1f} 格/秒　{getattr(j, 'detail', '') or j.message}")
-                sub.setObjectName("sub"); bl.addWidget(sub)
-            self.jobs.addWidget(box)
+        js = list(q.jobs if q else [])
+        run = [j for j in js if j.status == "running"]
+        wait = [j for j in js if j.status == "queued"]
+        if not run and not wait:
+            self.sum_btn.setText("🎬 目前沒有轉檔工作　　　轉檔佇列 ›")
+            return
+        txt = f"🎬 正在轉 {len(run)} 支" + (f" · 排隊 {len(wait)} 支" if wait else "")
+        if run:
+            j = run[0]
+            txt += f"　　{j.title} {j.progress * 100:.1f}% · {j.fps:.1f} 格/秒"
+        try:
+            import history
+            ts = [t for t in history.schedule(run + wait).values() if t]
+            if ts:
+                txt += f"　　⏱ 預計 {datetime.fromtimestamp(max(ts)).strftime('%H:%M')} 全部完成"
+        except Exception:
+            pass
+        self.sum_btn.setText(txt + "　　轉檔佇列 ›")
