@@ -20,74 +20,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import core
 
-PAGE = r"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FusionStitch</title>
-<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon-192.png">
-<meta name="theme-color" content="#0e1116"><meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="FusionStitch"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<style>
-:root{color-scheme:dark}body{margin:0;background:#0e1116;color:#e8ecf2;font:15px/1.45 system-ui,"Microsoft JhengHei",sans-serif}
-header{padding:12px 16px;background:#090c10;border-bottom:1px solid #252c35;display:flex;justify-content:space-between;align-items:center}
-h1{font-size:17px;margin:0}main{padding:12px 16px;max-width:720px;margin:auto}
-.card{background:#151a21;border:1px solid #252c35;border-radius:12px;padding:12px 14px;margin:10px 0}
-.k{color:#8994a4;font-size:13px}.v{font-weight:800;font-size:18px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.bar{height:8px;background:#222933;border-radius:4px;overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;background:#2b8ad8}
-.job{border-top:1px solid #252c35;padding:10px 0}.job:first-child{border-top:0}
-.st{font-size:12px;padding:1px 8px;border-radius:9px;background:#222933}.run{background:#1f5f99}.done{background:#1d5c3a}.err{background:#6b2430}.pau{background:#5c4a1d}
-button{background:#171d26;color:#e8ecf2;border:1px solid #2a3340;border-radius:8px;padding:7px 12px;font:inherit;margin:4px 6px 0 0}
-button.p{background:#e51e63;border:0;font-weight:800}input{font:inherit}
-.muted{color:#8994a4;font-size:13px}#notes li{margin:4px 0}
-</style></head><body>
-<header><h1>FusionStitch</h1><span class="muted" id="ver"></span></header>
-<main>
-<div class="card"><div class="grid">
-<div><div class="k">CPU</div><div class="v" id="cpu">—</div></div>
-<div><div class="k">GPU 3D</div><div class="v" id="gpu">—</div></div>
-<div><div class="k">NVENC</div><div class="v" id="enc">—</div></div>
-<div><div class="k">GPU 溫度</div><div class="v" id="temp">—</div></div>
-<div><div class="k">功耗</div><div class="v" id="pow">—</div></div>
-<div><div class="k">記憶體</div><div class="v" id="ram">—</div></div>
-</div></div>
-<div class="card"><div class="k">轉檔佇列 <span id="sum"></span></div>
-<button onclick="all_('pause')">⏸ 全部暫停</button><button onclick="all_('resume')">▶ 全部繼續</button>
-<div id="relay" class="muted"></div><div id="jobs" class="muted">載入中…</div></div>
-<div class="card"><div class="k">線上更新</div>
-<p class="muted">選手機裡的 v版本_Update.zip，上傳後會先顯示更新內容，按「確定更新」才會開始。轉檔不會中斷。</p>
-<input type="file" id="zip" accept=".zip"><button onclick="up()">上傳</button>
-<div id="upd"></div></div>
-</main>
-<script>
-const ST={queued:["排隊中",""],running:["轉檔中","run"],paused:["已暫停","pau"],done:["完成","done"],error:["失敗","err"],cancelled:["已取消",""]};
-const fmt=s=>s==null?"—":(s>=3600?Math.floor(s/3600)+":"+String(Math.floor(s%3600/60)).padStart(2,"0"):Math.floor(s/60))+":"+String(Math.floor(s%60)).padStart(2,"0");
-async function act(id,a){await fetch(`/api/job/${id}/${a}`,{method:"POST"});load()}
-if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});
-async function all_(a){await fetch(`/api/queue/${a}`,{method:"POST"});load()}
-async function load(){
- const r=await fetch("/api/status");if(r.status==401){location.reload();return}
- const d=await r.json();ver.textContent="V"+d.version;
- const g=d.perf.gpu||{};cpu.textContent=Math.round(d.perf.cpu||0)+"%";gpu.textContent=g.gpu!=null?g.gpu+"%":"—";
- enc.textContent=g.enc!=null?g.enc+"%":"—";temp.textContent=g.temp!=null?g.temp+"°C":"—";pow.textContent=g.power!=null?Math.round(g.power)+" W":"—";
- ram.textContent=Math.round(d.perf.ram_pct||0)+"%";
- relay.textContent=d.relay||"";sum.textContent=d.summary||"";
- jobs.innerHTML=d.jobs.length?d.jobs.map(j=>{const s=ST[j.status]||[j.status,""];const p=(j.status=="done"?1:j.progress)*100;
-  return `<div class="job"><b>${j.title}</b> <span class="st ${s[1]}">${s[0]}</span>
-  <div class="bar"><i style="width:${p.toFixed(1)}%"></i></div>
-  <div class="muted">${p.toFixed(1)}%${j.status=="running"?` · ${j.fps.toFixed(1)} fps · 剩 ${fmt(j.eta)}`:""} · ${j.name}</div>
-  <div class="muted">${j.message||""}</div>
-  ${j.status=="running"||j.status=="queued"?`<button onclick="act(${j.id},'pause')">暫停</button>`:""}
-  ${j.status=="paused"||j.status=="error"?`<button onclick="act(${j.id},'resume')">繼續</button>`:""}
-  ${["running","queued","paused"].includes(j.status)?`<button onclick="if(confirm('取消？'))act(${j.id},'cancel')">取消</button>`:""}</div>`}).join(""):"沒有工作";
-}
-async function up(){const f=zip.files[0];if(!f)return;upd.innerHTML="上傳中…";
- const r=await fetch("/api/update/upload",{method:"POST",body:f});const d=await r.json();
- if(!d.ok){upd.innerHTML=`<p style="color:#ff6577">${d.message}</p>`;return}
- upd.innerHTML=`<p><b>V${d.from} → V${d.to}</b></p><ul id="notes">${d.notes.map(n=>"<li>"+n+"</li>").join("")}</ul><button class="p" onclick="go()">確定更新</button>`}
-async function go(){const r=await fetch("/api/update/apply",{method:"POST"});const d=await r.json();upd.innerHTML=`<p>${d.message}</p>`;setTimeout(load,4000)}
-load();setInterval(load,2000);
-</script></body></html>"""
-
 LOGIN = """<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#0e1116"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
@@ -304,8 +236,6 @@ class Remote:
                 if u.path in ("/", "/index.html"):
                     import webpc_page
                     return self._send(200, webpc_page.PAGE)
-                if u.path == "/simple":                      # the old one-page view
-                    return self._send(200, PAGE)
                 if u.path == "/api/status":
                     return self._json(remote.status())
                 if u.path == "/api/file":
@@ -434,26 +364,6 @@ class Remote:
         n = sum(1 for j in (q.jobs if q else []) if j.status == "queued")
         summary = (f"· 轉檔中 {run.title}" if run else "· 閒置") + (f" · 排隊 {n}" if n else "")
         return {"version": core.APP_VERSION, "perf": data, "jobs": jobs, "relay": relay, "summary": summary}
-
-    def queue_action(self, action) -> dict:
-        from PySide6.QtWidgets import QApplication
-        q = getattr(QApplication.instance(), "_fs_queue", None)
-        if not q:
-            return {"ok": False}
-        for j in list(q.jobs):
-            if action == "pause" and j.status in ("running", "queued"):
-                q.pause(j.id)
-            elif action == "resume" and j.status == "paused":
-                q.resume(j.id)
-        return {"ok": True}
-
-    def job_action(self, jid, action) -> dict:
-        from PySide6.QtWidgets import QApplication
-        q = getattr(QApplication.instance(), "_fs_queue", None)
-        if not q:
-            return {"ok": False}
-        {"pause": q.pause, "resume": q.resume, "cancel": q.cancel}.get(action, lambda _: None)(jid)
-        return {"ok": True}
 
     def upload(self, data: bytes) -> dict:
         import updater

@@ -114,30 +114,7 @@ def clip_meta(c: dict) -> dict:
     return out
 
 
-def created_parts(meta) -> tuple[str, str]:
-    s = str((meta or {}).get("created") or "")
-    try:
-        d = datetime.fromisoformat(s.replace("Z", "").split(".")[0])
-        return d.strftime("%Y%m%d"), d.strftime("%H%M%S")
-    except ValueError:
-        return "00000000", "000000"
-
-
-def output_folder(scan_folder: str) -> Path:
-    if cfg("out_folder_mode") == "custom" and cfg("out_folder"):
-        return Path(cfg("out_folder"))
-    return Path(scan_folder) / "stitched"
-
-
-def output_name(c: dict, meta: dict, preset: str, projection: str, ext: str) -> str:
-    d, t = created_parts(meta)
-    name = str(cfg("name_pattern") or "{date}_{time}_GP{num}_{preset}")
-    name = name.replace("{date}", d).replace("{time}", t).replace("{num}", c["num"]).replace("{preset}", preset)
-    if projection == "planet":
-        name += "_planet"
-    elif projection == "flat":
-        name += "_flat"
-    return name + "." + ext
+from naming import created_parts, output_folder, output_name  # noqa: E402,F401  (共用一份：快速轉檔、自動流程、已轉過判斷都用同一套檔名)
 
 
 # ======================================================================== performance float
