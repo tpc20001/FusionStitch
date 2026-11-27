@@ -2433,6 +2433,13 @@ class QueuePage(QWidget):
         self.after.currentIndexChanged.connect(lambda: set_cfg("after_queue", self.after.currentData()))
         top.addWidget(self.after)
         l.addLayout(top)
+        # ⚙ 設定（中繼、成品、速度、握手、改名）收成一區，預設收合
+        from PySide6.QtWidgets import QSizePolicy, QToolButton
+        self.set_btn = QToolButton(); self.set_btn.setCheckable(True); self.set_btn.setObjectName("setfold")
+        self.set_btn.setToolButtonStyle(Qt.ToolButtonTextOnly); self.set_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.set_btn.setStyleSheet("QToolButton#setfold{text-align:left;padding:6px 10px;border:1px solid #252c35;border-radius:8px;background:#121821}")
+        l.addWidget(self.set_btn)
+        self.qset = QWidget(); outer = l; l = QVBoxLayout(self.qset); l.setContentsMargins(4, 2, 0, 4)
         # where the footage is converted and where the result goes (can be changed any time)
         route = QHBoxLayout()
         route.addWidget(QLabel("中繼 SSD"))
@@ -2510,6 +2517,13 @@ class QueuePage(QWidget):
         self.df_on.setChecked(cfg("src_done_rename") is not False)
         self.df_on.toggled.connect(lambda v: set_cfg("src_done_rename", bool(v)))
         l.addWidget(self.df_on)
+        outer.addWidget(self.qset); l = outer
+        self.set_btn.setChecked(bool(cfg("q_set_open")))
+        self.qset.setVisible(self.set_btn.isChecked())
+
+        def _fold(v):
+            self.qset.setVisible(v); set_cfg("q_set_open", bool(v)); self._set_txt()
+        self.set_btn.toggled.connect(_fold)
         self._hs_busy = False
         self._pace_ui()
         try:
@@ -2553,6 +2567,18 @@ class QueuePage(QWidget):
         except Exception:
             pass
         self._pace_ui()
+
+    def _set_txt(self):
+        """⚙ 設定 收合時的一行摘要."""
+        try:
+            relay = (self.cache_edit.text().strip() or "不使用")
+            hs = f"握手 Lv{self.hs_now.text().split('Lv')[1].split(' ')[0]}" if "Lv" in self.hs_now.text() else ("握手 開" if self.hs_on.isChecked() else "握手 關")
+            txt = (f"{'▾' if self.set_btn.isChecked() else '▸'} ⚙ 設定　中繼 {relay} · 速度 {self.pace_mode.currentText()} · {hs}"
+                   f" · 改名 {'開' if self.df_on.isChecked() else '關'}")
+            if self.set_btn.text() != txt:
+                self.set_btn.setText(txt)
+        except Exception:
+            pass
 
     def _hs_act(self, **kw):
         if getattr(self, "_hs_busy", False):
@@ -2629,6 +2655,8 @@ class QueuePage(QWidget):
             pass
         if hasattr(self, "hs_now"):
             self._hs_ui()
+        if hasattr(self, "set_btn"):
+            self._set_txt()
 
     def _left(self, j):
         try:

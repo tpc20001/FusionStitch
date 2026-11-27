@@ -953,10 +953,21 @@ def quick_state() -> dict:
             "all_finish": all_finish(act)}
 
 
+_AF = {"t": 0.0, "k": None, "v": None}
+
+
 def all_finish(act) -> dict | None:
-    """⏱ 預計幾點全部完成（在跑＋排隊；暫停的不算）."""
+    """⏱ 預計幾點全部完成（在跑＋排隊；暫停的不算）。手機每 2～3 秒問一次：5 秒內重用上次算的."""
     import history
     js = [j for j in act if j.status in ("running", "queued")]
+    k = tuple(j.id for j in js)
+    if k == _AF["k"] and time.time() - _AF["t"] < 5:
+        return _AF["v"]
+    _AF.update(t=time.time(), k=k, v=_all_finish(js, history))
+    return _AF["v"]
+
+
+def _all_finish(js, history):
     if not js:
         return None
     sch = history.schedule(js)
