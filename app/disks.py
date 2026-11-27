@@ -12,12 +12,25 @@ _info: dict | None = None
 _lock = threading.Lock()
 
 
+_bg = {"started": False}
+
+
 def _load() -> dict:
+    """畫面的執行緒不等：第一次要問 Windows（PowerShell，可能好幾秒），在背景問，先回空的（SSD／HDD 暫時不知道）."""
+    if _info is None and threading.current_thread() is threading.main_thread():
+        if not _bg["started"]:
+            _bg["started"] = True
+            threading.Thread(target=_load_now, daemon=True, name="disks-load").start()
+        return {}
+    return _load_now()
+
+
+def _load_now() -> dict:
     global _info
     with _lock:
         if _info is not None:
             return _info
-        _info = {}
+        info = {}
         try:
             cmd = ("$p = Get-Partition | Where-Object DriveLetter | Select-Object DriveLetter,DiskNumber;"
                    "$d = Get-PhysicalDisk | Select-Object DeviceId,MediaType,FriendlyName;"
@@ -32,9 +45,10 @@ def _load() -> dict:
                 n = str(p.get("DiskNumber"))
                 if L:
                     k = kinds.get(n, ("", ""))
-                    _info[L] = {"disk": n, "kind": k[0], "name": k[1]}
+                    info[L] = {"disk": n, "kind": k[0], "name": k[1]}
         except Exception:
             pass
+        _info = info                                     # (只在問完之後才設，別的執行緒不會拿到一半的)
         return _info
 
 
