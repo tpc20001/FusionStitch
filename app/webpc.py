@@ -1231,14 +1231,6 @@ def handle(method: str, path: str, query: dict, body: dict, remote) -> tuple:
             return J(job_action(int(jid), action))
         if path.startswith("/api/queue/"):
             return J(queue_action(path.rsplit("/", 1)[1], body.get("value")))
-        if path == "/api/colortag/scan":
-            import colortag
-            import outfolders
-            d = str(body.get("dir") or "")
-            return J(colortag.scan_async([Path(d)] if d else outfolders.all_()))
-        if path == "/api/colortag/run":
-            import colortag
-            return J(colortag.start([str(x) for x in (body.get("paths") or [])]))
         if path == "/api/outfolders/add":
             import outfolders
             return J(outfolders.add(str(body.get("path") or "")))

@@ -29,31 +29,6 @@ def _probe(p) -> dict:
     return json.loads(r.stdout.decode("utf-8", "ignore") or "{}")
 
 
-def needs(p) -> bool:
-    """An mp4 whose video says nothing (or something else) about its colour space."""
-    try:
-        v = next((s for s in _probe(p).get("streams", []) if s.get("codec_type") == "video"), None)
-    except Exception:
-        return False
-    if not v or v.get("codec_name") not in ("hevc", "h264"):
-        return False
-    return not (v.get("color_space") == "bt709" and v.get("color_primaries") == "bt709" and v.get("color_transfer") == "bt709")
-
-
-def scan(folders) -> list[str]:
-    out = []
-    for f in folders:
-        try:
-            for p in sorted(Path(f).glob("*.mp4")):
-                if ".tmp" in p.name or ".joining" in p.name:
-                    continue
-                if needs(p):
-                    out.append(str(p))
-        except OSError:
-            pass
-    return out
-
-
 def fix(path: str) -> str:
     """Tag one file in place. Returns a short result; raises on failure (original untouched)."""
     import spherical
@@ -131,26 +106,9 @@ def start(paths: list[str]) -> dict:
     return {"ok": True, "message": f"開始補上色彩標記：{len(paths)} 支（不重新轉檔，一支幾秒）"}
 
 
-_F = {"scanning": False, "found": None}
-
-
-def scan_async(folders) -> dict:
-    """For the phone: scan in the background; status() carries the result."""
-    if _F["scanning"]:
-        return {"ok": True}
-    _F.update(scanning=True, found=None)
-
-    def run():
-        try:
-            _F["found"] = scan(folders)
-        finally:
-            _F["scanning"] = False
-    threading.Thread(target=run, daemon=True, name="colortag-scan").start()
-    return {"ok": True}
 
 
 def status() -> dict:
     d = {k: (list(v) if isinstance(v, list) else v) for k, v in _S.items() if k != "cancel"}
-    d.update(scanning=_F["scanning"], found=_F["found"])
     return d
 
