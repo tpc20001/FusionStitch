@@ -2,6 +2,8 @@
 name: PC screenshots
 on:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   shots:
     runs-on: windows-latest
@@ -19,6 +21,12 @@ jobs:
       - shell: pwsh
         timeout-minutes: 6
         run: python tools/shots.py
-      - uses: actions/upload-artifact@v4
+      - name: 放到 dev-shots（預先發行版，不是最新版，不影響程式更新）
         if: always()
-        with: { name: shots, path: shots/ }
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view dev-shots --repo "${{ github.repository }}" >/dev/null 2>&1 || gh release create dev-shots --repo "${{ github.repository }}" --prerelease --latest=false --title "dev shots（開發用截圖）" --notes "開發用：電腦版介面截圖，不是程式版本"
+          ls shots
+          gh release upload dev-shots shots/*.png --clobber --repo "${{ github.repository }}"
