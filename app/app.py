@@ -482,6 +482,14 @@ class LibraryPage(QWidget):
         self._valid = {}            # output path -> (size, mtime, ok)
         self._checking = False
         l.addWidget(self.table, 1)
+        # 空的時候：一句話告訴使用者下一步（不是一張空表格）
+        el = QVBoxLayout(self.table.viewport()); el.setAlignment(Qt.AlignCenter)
+        self.empty_lab = QLabel("還沒有素材\n\n按右上「選擇素材資料夾…」，或把 GoPro Fusion 資料夾拖進來\n（大多數時候用「★ 快速轉檔」更快）")
+        self.empty_lab.setAlignment(Qt.AlignCenter); self.empty_lab.setStyleSheet("color:#8994a4;font-size:15px;line-height:150%")
+        el.addWidget(self.empty_lab)
+        m = self.table.model()
+        for sig in (m.rowsInserted, m.rowsRemoved, m.modelReset):
+            sig.connect(lambda *_: self.empty_lab.setVisible(self.table.rowCount() == 0))
         tip = QLabel("提示：雙擊素材開啟預覽校正；狀態「已轉檔」是依輸出資料夾裡有沒有同編號的成品判斷。")
         tip.setObjectName("sub")
         l.addWidget(tip)
