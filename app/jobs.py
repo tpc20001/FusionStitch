@@ -522,13 +522,27 @@ class JobQueue:
             self._next = max(self._next, j.id + 1)
 
     def save(self):
+        """連續存很多次（例：一次加入幾百支）時合併成一次：0.5 秒內再存 → 0.6 秒後統一寫一次."""
+        now = time.time()
+        if now - getattr(self, "_last_save", 0.0) < 0.5:
+            if not getattr(self, "_save_pending", False):
+                self._save_pending = True
+                t = threading.Timer(0.6, self._save_now); t.daemon = True; t.start()
+            return
+        self._save_now()
+
+    def _save_now(self):
         """Never raises: the worker thread, the window and the phone page all save; two saves at
         the same moment (or the file briefly locked on Windows) used to kill the worker thread,
         leaving a job stuck at "轉檔中" that could not be cancelled."""
+        self._save_pending = False
+        self._last_save = time.time()
         try:
             with self.lock:
                 data = {"jobs": [j.to_dict() for j in self.jobs if j.status != "cancelled"]}
             txt = json.dumps(data, ensure_ascii=False)
+            if txt == getattr(self, "_last_txt", None):
+                return                                  # 沒變就不寫（省硬碟）
             with _SAVE_LOCK:
                 tmp = core.QUEUE_FILE.with_name(f"queue.{threading.get_ident()}.tmp")
                 with open(tmp, "w", encoding="utf-8") as f_:
@@ -538,6 +552,7 @@ class JobQueue:
                 for i in range(20):
                     try:
                         os.replace(tmp, core.QUEUE_FILE)
+                        self._last_txt = txt
                         try:
                             core.write_text_safe(core.QUEUE_FILE.with_name("queue.bak.json"), txt)
                         except OSError:

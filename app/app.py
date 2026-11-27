@@ -4115,7 +4115,7 @@ class MainWindow(QMainWindow):
         for run in runs:
             run.status = "queued"   # resume next start
         if runs:
-            q.save()
+            (q._save_now() if hasattr(q, "_save_now") else q.save())     # 關程式：馬上寫，不等合併
         try:
             import psutil
             keep = set((getattr(QApplication.instance(), "_fs_cloud", None) or {}).get("keep_pids") or ())
