@@ -8,6 +8,7 @@ is usually filed in the same place every time.
 from __future__ import annotations
 
 import os
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -320,11 +321,20 @@ class QuickPage(QWidget):
         from PySide6.QtWidgets import QApplication, QMessageBox
         preset = self.preset.currentData()
         self.b_multi.setEnabled(False)
+        # 1) 背景先讀好每支影片的資訊（畫面不卡、按鈕上看得到進度）
+        st = {"txt": "準備中…", "done": False}
+        th = threading.Thread(target=lambda: (self.main.warm_folders(sel, lambda t: st.update(txt=t)), st.update(done=True)),
+                              daemon=True, name="warm-folders")
+        th.start()
+        while not st["done"]:
+            self.b_multi.setText("讀取中… " + st["txt"])
+            QApplication.processEvents()
+            th.join(0.1)
 
         def prog(t):
             self.b_multi.setText("加入中… " + t)
             QApplication.processEvents()
-        try:
+        try:                                            # 2) 加入佇列（資訊都讀好了，很快）
             res = self.main.queue_folders(sel, preset, prog)
         finally:
             self._multi_all(False)

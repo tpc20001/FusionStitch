@@ -3927,6 +3927,27 @@ class MainWindow(QMainWindow):
         self.library.refresh_status()
         return True
 
+    @staticmethod
+    def warm_folders(folders_, progress=None, stop=None):
+        """(背景執行緒) 先把每支影片的檔案資訊讀好（ffprobe，有快取），之後在畫面執行緒加入佇列就不會卡."""
+        import clips as clips_mod
+        for i, f in enumerate(folders_):
+            try:
+                cs = [c for c in clips_mod.scan(f) if c.get("complete") and c.get("kind") == "video"]
+            except Exception:
+                continue
+            for j, c in enumerate(cs):
+                if stop and stop():
+                    return
+                if progress:
+                    progress(f"讀取 {os.path.basename(f)}（{i + 1}/{len(folders_)}）：{j + 1}/{len(cs)}")
+                try:
+                    media.timeline(c["front"])
+                    for p in c["front"] + c["back"]:
+                        media.probe(p)
+                except Exception:
+                    pass
+
     def queue_folders(self, folders_, preset=None, progress=None) -> dict:
         """📂 一次把好幾個素材資料夾的影片加入佇列（每個資料夾自己一批）。
         跳過：不完整、已經在佇列、成品已經存在、以前轉過（✓ 已轉過）。回傳 {folder: (加入, 略過)}."""

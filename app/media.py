@@ -21,7 +21,7 @@ import numpy as np
 import ffm as ff
 
 
-@lru_cache(maxsize=512)
+@lru_cache(maxsize=8192)                 # (📂 一次加好幾個資料夾：先在背景讀好，加入佇列時不用再等)
 def _probe_cached(path: str, mtime: float) -> dict:
     return ff.probe(path)
 

@@ -184,6 +184,7 @@ def queue_folders(dirs: list, preset: str | None) -> dict:
     dirs = [d for d in dirs if d and os.path.isdir(d)]
     if not dirs:
         return {"ok": False, "message": "沒有勾選資料夾"}
+    _win().warm_folders(dirs)                      # (這是網頁的執行緒：先讀好影片資訊，畫面那邊加入佇列就很快)
     res = ui(lambda: _win().queue_folders(dirs, preset or None))
     add = sum(a for a, _ in res.values())
     return {"ok": True, "message": f"📂 {len(dirs)} 個資料夾，共加入 {add} 個轉檔工作",
