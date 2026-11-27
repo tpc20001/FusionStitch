@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 APP_NAME = "FusionStitch"
-APP_VERSION = "2.35.3"
+APP_VERSION = "2.35.4"
 LAUNCHER_API = 1          # bump when an update needs a newer launcher (FusionStitch.exe)
 
 APP_DIR = Path(__file__).resolve().parent
@@ -94,20 +94,9 @@ def settings() -> dict:
             except (OSError, ValueError):
                 data = {}
             _cache = {**json.loads(json.dumps(DEFAULTS)), **data}
-            if data and int(data.get("settings_rev", 0) or 0) < SETTINGS_REV:
-                # V2.8.0: 原廠色彩 is the default now (a Fusion LUT ships with the program); switch once,
-                # a later choice of 自動調色 stays
-                if data.get("color_mode", "auto") == "auto":
-                    _cache["color_mode"] = "gopro"
-                _cache["settings_rev"] = SETTINGS_REV
-                try:
-                    save_settings()
-                except OSError:
-                    pass
         return _cache
 
 
-SETTINGS_REV = 280
 BUILTIN_LUT = APP_DIR / "gopro_fusion.cube"     # learned from GoPro Fusion Studio's renders (V2.8.0)
 
 

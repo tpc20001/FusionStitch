@@ -419,10 +419,6 @@ _QUEUE = None           # the program's queue (run_video saves it once the analy
 WORKER_NAME = "jobqueue2"
 
 
-class _RetireWorker(BaseException):
-    """Ends an older worker loop after a hot update (BaseException: its except clauses let it pass)."""
-
-
 def _gpu_gate() -> dict:
     try:
         from PySide6.QtWidgets import QApplication
@@ -680,15 +676,6 @@ class JobQueue:
           as an error (the normal automatic retry continues from the finished parts);
         * the job runs with the newest jobs module, so a hot update applies to the next job
           without restarting the program."""
-        if threading.current_thread().name == "jobqueue":
-            # the one-job-at-a-time worker of an older version (still running after a hot update)
-            # reached its next job: hand over to the new scheduler and let the old loop end
-            with self.cv:
-                job.status, job.message = "queued", "換成新的排程（可同時處理多支）：馬上開始"
-                self.cv.notify_all()
-            core.log("job worker: old one-at-a-time worker retired, new scheduler started", "job_log.txt")
-            self._start_worker()
-            raise _RetireWorker()
         import sys as _sys
         M = _sys.modules.get("jobs") or _sys.modules[__name__]
         fn = (M.run_auto if job.opts.get("auto") else M.run_photo if job.clip.get("kind") == "photo"
