@@ -8,7 +8,6 @@ decodes from the very first chapter and was the cause of the CPU spikes and
 """
 from __future__ import annotations
 
-import json
 import os
 import queue
 import struct
@@ -16,7 +15,6 @@ import subprocess
 import threading
 from dataclasses import dataclass, field
 from functools import lru_cache
-from pathlib import Path
 
 import numpy as np
 

@@ -1,4 +1,4 @@
-"""🧪 成品健檢 + 🧪 全部轉完後（睡眠／關機）.
+"""🧪 成品健檢.
 
 健檢：掃成品資料夾的 mp4，找出
   zero   0 位元組               → 移到「_問題檔」
@@ -7,14 +7,10 @@
   no360  沒有 360 資訊          → 一鍵補（不重新轉檔：跟補色彩標記同一套）
   color  沒有色彩標記           → 一鍵補
 移動不是刪除：檔案搬到同一個資料夾裡的「_問題檔」子資料夾，自己確認後再處理。
-
-全部轉完後：cfg after_all = none／sleep／shutdown。佇列從「有工作」變成「全部做完（沒有在跑、排隊、暫停的）」→ 倒數 60 秒，
-可以取消；做一次就自動回到「不動作」（不會下次又關機）。tick() 由握手的背景迴圈每 2 秒叫一次（熱更新也不斷）。
 """
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import threading
@@ -135,81 +131,3 @@ def status() -> dict:
     except Exception:
         d["fixing"] = None
     return d
-
-
-# ---------------------------------------------------------------- 🧪 全部轉完後
-_A = {"had": False, "armed": 0.0, "fired": False}
-AFTER_TXT = {"none": "不動作", "sleep": "睡眠", "shutdown": "關機"}
-COUNT = 60
-
-
-def after_mode() -> str:
-    m = str(core.cfg("after_all") or "none")
-    return m if m in AFTER_TXT else "none"
-
-
-def _queue_left() -> tuple[int, int]:
-    try:
-        from PySide6.QtWidgets import QApplication
-        q = getattr(QApplication.instance(), "_fs_queue", None)
-        js = list(getattr(q, "jobs", []) or [])
-    except Exception:
-        js = []
-    left = [j for j in js if j.status in ("running", "queued", "paused", "waiting")]
-    _A["failed"] = len([j for j in js if j.status in ("failed", "error")])
-    return len(left), len(js)
-
-
-def tick():
-    m = after_mode()
-    left, _ = _queue_left()
-    if left:
-        _A["had"] = True
-        if _A["armed"]:
-            _A["armed"] = 0.0                          # 又有新的工作 → 取消倒數
-        return
-    if m == "none" or not _A["had"]:
-        _A["armed"] = 0.0
-        return
-    now = time.time()
-    if not _A["armed"]:
-        _A["armed"] = now
-        core.log(f"after_all: queue done → {m} in {COUNT}s")
-        return
-    if now - _A["armed"] >= COUNT:
-        _A.update(armed=0.0, had=False)
-        core.set_cfg("after_all", "none")              # 只做一次
-        core.log(f"after_all: {m} now")
-        _do(m)
-
-
-def _do(m: str):
-    if os.name != "nt":
-        return
-    try:
-        if m == "shutdown":
-            subprocess.Popen(["shutdown", "/s", "/t", "10", "/c", "FusionStitch：全部轉完了，10 秒後關機（shutdown /a 可以取消）"],
-                             creationflags=ff.NO_WINDOW)
-        elif m == "sleep":
-            subprocess.Popen(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"], creationflags=ff.NO_WINDOW)
-    except Exception as e:
-        core.log(f"after_all failed: {e}")
-
-
-def after_set(mode: str | None = None, cancel: bool = False) -> dict:
-    if cancel:
-        _A.update(armed=0.0, had=False)
-        core.set_cfg("after_all", "none")
-        return {"ok": True, "message": "已取消：全部轉完後不動作", "after": after_status()}
-    if mode in AFTER_TXT:
-        core.set_cfg("after_all", mode)
-        if mode != "none" and _queue_left()[0]:
-            _A["had"] = True
-        return {"ok": True, "message": f"全部轉完後：{AFTER_TXT[mode]}", "after": after_status()}
-    return {"ok": False, "message": "不認得的選項"}
-
-
-def after_status() -> dict:
-    left, tot = _queue_left()
-    cd = max(0, int(COUNT - (time.time() - _A["armed"]))) if _A["armed"] else None
-    return {"mode": after_mode(), "txt": AFTER_TXT[after_mode()], "left": left, "countdown": cd, "failed": _A.get("failed", 0)}

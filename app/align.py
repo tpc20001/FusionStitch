@@ -7,7 +7,6 @@ the two views agree (high-pass NCC, so exposure differences don't matter).
 from __future__ import annotations
 
 import math
-import tempfile
 
 import cv2
 import numpy as np

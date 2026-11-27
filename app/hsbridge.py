@@ -8,7 +8,6 @@
 """
 from __future__ import annotations
 
-import os
 import sys
 import threading
 import time
@@ -64,11 +63,6 @@ def _cpu() -> float:
 
 def state() -> dict:
     now = time.time()
-    try:                                    # 🧪 全部轉完後（睡眠／關機）跟著這個 2 秒的背景迴圈檢查
-        import outcheck
-        outcheck.tick()
-    except Exception:
-        pass
     try:                                    # ✅ 原檔資料夾轉完 → 改名「-FS DONE」（每 60 秒，背景）
         import donefolder
         donefolder.tick()

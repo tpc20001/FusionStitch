@@ -159,15 +159,6 @@ def _blend(f, b, plane, offset, add=None, scale=255.0):
     return np.clip(out + 0.5, 0, 255).astype(np.uint8)
 
 
-def lens_color_yuv(planes, coeffs, full=True):
-    """Per-lens colour match on a source frame (RGB gain + offset). Affine colour maps
-    commute with the (linear) resampling, so doing it before the remap equals the GPU order."""
-    if all(abs(a - b) < 1e-6 for a, b in zip(coeffs, geo.IDENTITY_COLOR)):
-        return planes
-    rgb = yuv420_to_rgb(*planes, full=full)
-    rgb = rgb * np.array(coeffs[:3], np.float32) + np.array(coeffs[3:], np.float32)
-    return rgb_to_yuv420(np.clip(rgb, 0, 1), full)
-
 
 def lens_color_bgr(img, coeffs):
     if all(abs(a - b) < 1e-6 for a, b in zip(coeffs, geo.IDENTITY_COLOR)):
@@ -237,11 +228,6 @@ def stitch_bgr(fr, bk, maps):
         out += t["dterm"][..., ::-1] * 255.0
     return np.clip(out + 0.5, 0, 255).astype(np.uint8)
 
-
-def yuv_to_bgr(planes, w, h):
-    cv2 = _cv()
-    i420 = np.concatenate([p.ravel() for p in planes]).reshape(h * 3 // 2, w)
-    return cv2.cvtColor(i420, cv2.COLOR_YUV2BGR_I420)
 
 
 # ---------------------------------------------------------------- colour + nadir patch (CPU side)
@@ -333,11 +319,6 @@ class Finisher:
 # have to guess (an untagged file can be read as BT.601 → reds turn orange, greens yellowish).
 COLOR_TAGS = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]
 
-
-def nv12_to_planes(buf, w, h):
-    a = np.frombuffer(buf, np.uint8)
-    uv = a[w * h:w * h * 3 // 2].reshape(h // 2, w // 2, 2)
-    return a[:w * h].reshape(h, w), np.ascontiguousarray(uv[..., 0]), np.ascontiguousarray(uv[..., 1])
 
 
 # ---------------------------------------------------------------- job objects

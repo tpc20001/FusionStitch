@@ -128,11 +128,6 @@ def _src_dir() -> Path:
     return d
 
 
-def _done_dir() -> Path:
-    d = root() / "done"
-    d.mkdir(exist_ok=True)
-    return d
-
 
 def _staged_name(src: str) -> str:
     st = os.stat(src)
@@ -648,29 +643,6 @@ def _move_pending():
                 j.output = str(used)
         return                                   # one per round: prefetch gets its turn
 
-
-def _wanted() -> list[str]:
-    js = [j for j in _jobs() if _uses_footage(j) and j.status in ("running", "queued")]
-    js.sort(key=lambda j: 0 if j.status == "running" else 1)
-    out = []
-    for j in js:
-        for f in _clip_files(j.clip):
-            if f not in out and os.path.exists(f):
-                out.append(f)
-    return out
-
-
-def _wanted_ranked() -> list[tuple[str, int]]:
-    """(footage file, position of its job: 0 = running / first, 1 = next, ...)."""
-    js = [j for j in _jobs() if _uses_footage(j) and j.status in ("running", "queued")]
-    js.sort(key=lambda j: 0 if j.status == "running" else 1)
-    out, seen = [], set()
-    for rank, j in enumerate(js):
-        for f in _clip_files(j.clip):
-            if f not in seen and os.path.exists(f):
-                seen.add(f)
-                out.append((f, rank))
-    return out
 
 
 def _prefetch_one():

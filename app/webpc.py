@@ -397,11 +397,6 @@ def queue_state() -> dict:
     except Exception:
         hst = None
     try:
-        import outcheck
-        aft = outcheck.after_status()
-    except Exception:
-        aft = None
-    try:
         afin = all_finish(list(q.jobs) if q else [])
     except Exception:
         afin = None
@@ -1096,7 +1091,7 @@ def handle(method: str, path: str, query: dict, body: dict, remote) -> tuple:
                 return J(cloudupd.status())
             if path == "/api/outcheck":
                 import outcheck
-                return J({**outcheck.status(), "after": outcheck.after_status()})
+                return J(outcheck.status())
             if path == "/api/hs":
                 import hsbridge
                 return J(hsbridge.status())
@@ -1188,9 +1183,6 @@ def handle(method: str, path: str, query: dict, body: dict, remote) -> tuple:
         if path == "/api/outcheck/run":
             import outcheck
             return J(outcheck.run_fix(list(body.get("items") or [])))
-        if path == "/api/after":
-            import outcheck
-            return J(outcheck.after_set(body.get("mode"), bool(body.get("cancel"))))
         if path == "/api/donefolder/rename":
             import donefolder
             return J(donefolder.rename_batch(str(body.get("folder") or ""), bool(body.get("dry", True)), bool(body.get("force"))))

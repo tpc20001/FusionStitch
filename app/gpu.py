@@ -829,9 +829,6 @@ class GPUStitcher:
         if name in self.prog:
             self.prog[name].value = unit
 
-    def _render(self, front, back, pbo):
-        with self.ctx:          # make this context current (several may exist in one thread)
-            self._render_now(front, back, pbo)
 
     def _seam_start(self, front, back):
         """接縫融合 tables of this frame: measured here and now, or (FS_SEAM_THREAD=1) started in the

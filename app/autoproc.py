@@ -11,7 +11,6 @@ or tweaked later) and written to LOG\\auto_log.txt with the measured numbers.
 """
 from __future__ import annotations
 
-import json
 import time
 
 import core

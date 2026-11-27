@@ -7,7 +7,6 @@ QApplication so a hot update can swap this window without stopping a job.
 from __future__ import annotations
 
 import json
-import math
 import re
 import os
 import subprocess
@@ -20,15 +19,10 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QSize, Qt, QTimer, Signal, QUrl
-from PySide6.QtGui import QAction, QDesktopServices, QFont, QIcon, QKeySequence, QPixmap, QShortcut
+from PySide6.QtCore import QObject, QPoint, QSize, Qt, QTimer, Signal, QUrl
+from PySide6.QtGui import QDesktopServices, QFont, QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog,
-                               QFormLayout, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel,
-                               QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox,
-                               QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QScrollArea, QSlider,
-                               QSpinBox, QDoubleSpinBox, QSplitter, QStackedWidget, QSystemTrayIcon, QTableWidget,
-                               QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox, QDoubleSpinBox, QStackedWidget, QSystemTrayIcon, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 import core
 from core import APP_VERSION, cfg, set_cfg, fmt_dur, fmt_bytes
@@ -40,7 +34,7 @@ import projects
 import jobs
 import media
 import updater
-from ui_common import (Histogram, NavDelegate, ParamRow, Sparkline, THEME, TC, app_icon, card, stylesheet)
+from ui_common import Histogram, NavDelegate, ParamRow, Sparkline, TC, app_icon, card, stylesheet
 
 PAGE_LIBRARY, PAGE_EDITOR, PAGE_QUEUE, PAGE_PERF, PAGE_SETTINGS, PAGE_UPDATE, PAGE_CHANGELOG, PAGE_LOG, PAGE_HELP, PAGE_OUTPUTS, PAGE_QUICK = range(11)
 
@@ -2478,12 +2472,6 @@ class QueuePage(QWidget):
         pr.addWidget(self.pace_slider)
         self.pace_val = QLabel(f"{self.pace_slider.value() * 5}%"); self.pace_val.setFixedWidth(44); pr.addWidget(self.pace_val)
         self.pace_now = QLabel(""); self.pace_now.setObjectName("sub"); pr.addWidget(self.pace_now)
-        self.aft = QComboBox(); [self.aft.addItem(t, k) for k, t in (("none", "不動作"), ("sleep", "睡眠"), ("shutdown", "關機"))]
-        self.aft.setToolTip("佇列全部做完（沒有在跑、排隊、暫停的）→ 倒數 60 秒再睡眠／關機；做一次就自動回到「不動作」")
-        self.aft.activated.connect(lambda _i: self._aft_set(mode=self.aft.currentData())); pr.addWidget(self.aft)
-        self.aft.setVisible(False)                # (重複：佇列上方原本就有「全部轉完後」，用原本那個)
-        self.aft_x = QPushButton("取消倒數"); self.aft_x.setVisible(False); self.aft_x.clicked.connect(lambda: self._aft_set(cancel=True))
-        pr.addWidget(self.aft_x)
         pr.addStretch(1)
         l.addLayout(pr)
         # 🤝 跟 SortCut 握手（分配拉桿兩邊共用）
@@ -2578,31 +2566,6 @@ class QueuePage(QWidget):
             core.log(f"handshake ui: {e}")
         self._pace_ui()
 
-    def _aft_set(self, mode=None, cancel=False):
-        try:
-            import outcheck
-            r = outcheck.after_set(mode, cancel)
-            if hasattr(self.main, "toast"):
-                self.main.toast(r.get("message", ""))
-        except Exception as e:
-            core.log(f"after ui: {e}")
-        self._pace_ui()
-
-    def _aft_ui(self):
-        try:
-            import outcheck
-            a = outcheck.after_status()
-        except Exception:
-            return
-        i = self.aft.findData(a["mode"])
-        if i >= 0 and not self.aft.view().isVisible():
-            self.aft.setCurrentIndex(i)
-        cd = a.get("countdown")
-        self.aft_x.setVisible(cd is not None)
-        if cd is not None:
-            self.aft_x.setText(f"⏳ {cd} 秒後{a['txt']}：取消")
-            self.aft_x.setStyleSheet("color:#ff6b6b;font-weight:700")
-
     def _hs_mem_fill(self):
         try:
             import hsbridge
@@ -2666,8 +2629,6 @@ class QueuePage(QWidget):
             pass
         if hasattr(self, "hs_now"):
             self._hs_ui()
-        if hasattr(self, "aft"):
-            self._aft_ui()
 
     def _left(self, j):
         try:

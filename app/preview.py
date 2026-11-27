@@ -174,9 +174,6 @@ from gpu import SEAM_GLSL, SEAMGAIN_GLSL
 FRAG = _FRAG_SRC.replace("//COLOR_GLSL//", color.GLSL).replace("//SEAM_GLSL//", SEAM_GLSL + SEAMGAIN_GLSL)
 
 
-def lens_matrix(P, which):
-    return (geo.global_rotation(P) @ geo.lens_rotation(P, which)).T
-
 
 class StitchView(QOpenGLWidget):
     """mode: 0 = 360 環景, 1 = 平面全景, 2 = 小星球, 3 = 原始雙魚眼"""

@@ -257,13 +257,6 @@ def grade_rgb(c: np.ndarray, g: dict) -> np.ndarray:
     return np.clip(c, 0, 1).astype(np.float32)
 
 
-def grade_bgr8(img: np.ndarray, g: dict) -> np.ndarray:
-    if is_identity(g):
-        return img
-    rgb = img[..., ::-1].astype(np.float32) / 255.0
-    out = grade_rgb(rgb, g)
-    return np.clip(out[..., ::-1] * 255 + 0.5, 0, 255).astype(np.uint8)
-
 
 # ---------------------------------------------------------------- .cube LUTs
 _lut_cache: dict = {}

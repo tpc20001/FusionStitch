@@ -183,9 +183,6 @@ def _clip_curves(clip: dict, fps: float, total: int):
     return _CACHE[key]
 
 
-def clip_curve(clip: dict, fps: float, total: int) -> np.ndarray | None:
-    return _clip_curves(clip, fps, total)[0]
-
 
 def _total(clip, t, fps):
     import media

@@ -111,9 +111,6 @@ def dest_dir(job) -> Path:
     return naming.output_folder(folder)
 
 
-def spares_of(job) -> list[str]:
-    return [s for s in (get(bid_of(job)).get("spares") or []) if s]
-
 
 def _pending_to(drive: str) -> float:
     """Bytes waiting on the SSD relay to be moved to this drive."""

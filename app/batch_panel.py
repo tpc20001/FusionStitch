@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import time
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QDialog, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
                                QMessageBox, QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget)
 

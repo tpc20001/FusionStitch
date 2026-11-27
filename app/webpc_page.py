@@ -435,38 +435,15 @@ async function cuMount(box){if(!box)return;clearInterval(CUT);
 let BSEL=new Set();
 document.addEventListener("input",e=>{if(e.target&&e.target.id==="pcR"){const v=document.getElementById("pcV");if(v)v.textContent=e.target.value+"%";}});
 document.addEventListener("change",async e=>{if(e.target&&e.target.id==="pcR"){await act("/api/pace",{pct:+e.target.value});viewQueue();}});
-document.addEventListener("change",async e=>{const t=e.target;if(!t||!t.dataset)return;
-  if(t.id==="hsR"){const v=+t.value*10;await act("/api/hs",{share:v});viewQueue();}
-  else if(t.id==="hsRes"){await act("/api/hs",{reserve:+t.value});viewQueue();}
-  else if(t.id==="hsOn"){await act("/api/hs",{on:t.checked});viewQueue();}
-  else if(t.id==="hsResOn"){await act("/api/hs",{reserve_on:t.checked});viewQueue();}
-  else if(t.id==="hsPr"){await act("/api/hs",{prio:+t.value});viewQueue();}});
-document.addEventListener("input",e=>{const t=e.target;if(t&&t.id==="hsR"){const o=document.getElementById("hsV");if(o)o.textContent=`FusionStitch ${t.value*10} : ${100-t.value*10} ${o.dataset.o}`;}
-  if(t&&t.id==="hsRes"){const o=document.getElementById("hsRV");if(o)o.textContent=t.value+"%";}});
-document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.closest("[data-hsb]");if(!b)return;await act("/api/hs",{boost:+b.dataset.hsb});viewQueue();});
-function aftH(a){if(!a)return "";const cd=a.countdown!=null;
-  return `<div class="pcbox"${cd?' style="border-color:#ff6b6b"':""}><div class="pchd"><b>🧪 全部轉完後</b><select id="aftSel" style="margin-left:auto">${[["none","不動作"],["sleep","睡眠"],["shutdown","關機"]].map(([k,t])=>`<option value="${k}" ${a.mode===k?"selected":""}>${t}</option>`).join("")}</select></div>
-${cd?`<div style="color:#ff6b6b;font-weight:700;margin:6px 0">⏳ ${a.countdown} 秒後${esc(a.txt)}${a.failed?`（有 ${a.failed} 支失敗，回來再看）`:""}　<button class="pill" data-aftx="1">取消</button></div>`:`<div class="snote">${a.mode==="none"?"佇列做完不會怎樣":`還剩 ${a.left} 支，全部做完會倒數 60 秒再${esc(a.txt)}（做一次就回到不動作）`}</div>`}</div>`;}
-document.addEventListener("change",e=>{if(e.target&&e.target.id==="qkHide"){try{localStorage.setItem("fsQHide",e.target.checked?"1":"0");}catch(x){}S.qkSig=null;viewQuick();}});
-function finH(f){if(!f)return "";return `<div class="pcbox" style="padding:8px 12px"><b>⏱ 預計 ${fmtClk(f.at)} 全部完成</b> <span class="snote">（剩 ${fd(f.at-Date.now()/1000)}、${f.n} 支${f.partial?"，有幾支還沒有預估":""}）</span></div>`;}
-document.addEventListener("change",async e=>{if(e.target&&e.target.id==="aftSel"){await act("/api/after",{mode:e.target.value});viewQueue();}});
-document.addEventListener("click",async e=>{if(e.target.closest&&e.target.closest("[data-aftx]")){await act("/api/after",{cancel:true});viewQueue();}});
 function dfH(f){if(!f)return "";const W=Object.entries(f.wait||{});
   return `<div class="pcbox"><div class="pchd"><b>✅ 原檔資料夾轉完自動改名</b><label style="display:flex;gap:6px;align-items:center;margin-left:auto"><input type="checkbox" id="dfOn" ${f.on?"checked":""}>開</label></div>
 <div class="snote">日期資料夾裡的影片全部轉好（沒有失敗）→ 自動改成「20261121-FS DONE」。只改最外層的日期資料夾；100GBACK／100GFRNT 和影片檔名都不動，不刪任何檔案。</div>
 ${(f.last||[]).length?`<div class="snote" style="color:#45d483">已改：${f.last.slice(0,5).map(x=>esc(x.new.split(/[\\/]/).pop())).join("、")}</div>`:""}
 ${W.length?`<div class="snote" style="color:#ff9f43">${W.slice(0,5).map(([k,v])=>esc(k.split(/[\\/]/).pop())+"："+esc(v)).join("<br>")}</div>`:""}</div>`;}
 document.addEventListener("change",async e=>{if(e.target&&e.target.id==="dfOn"){await act("/api/donefolder",{on:e.target.checked});viewQueue();}});
-function hsH(h){if(!h)return "";const M={alone:"照常跑",lead:"這邊先跑",yield:"讓對方先",split:"照分配"};const P=h.peers||[];const o=h.other||"SortCut";
-  const who=P.length?P.map(p=>`${esc(p.name)} V${esc(p.ver)}（${esc(p.what||"閒著")}）`).join("、"):"沒看到 "+esc(o);
-  const left=h.boost_until-Date.now()/1000;const sh=Math.round((h.share||50)/10);
-  return `<div class="pcbox"><div class="pchd"><b>🤝 握手（SortCut、ComfyRemote）</b><label style="display:flex;gap:6px;align-items:center;margin-left:auto"><input type="checkbox" id="hsOn" ${h.on?"checked":""}>開</label></div>
-${h.on?`<div class="snote" style="margin:2px 0 6px;${h.mode==="yield"||h.mode==="split"?"color:#ffb347":""}">${who}<br>${M[h.mode]||h.mode}：${esc(h.why||"")} · 規則第 ${h.rules} 版${h.rules_from==="lib"?"（對方的新版）":""}</div>
-<div class="pcs"><span>分配</span><input type="range" id="hsR" min="1" max="9" step="1" value="${sh}"><b id="hsV" data-o="${esc(o)}" style="white-space:nowrap">FusionStitch ${sh*10} : ${100-sh*10} ${esc(o)}</b></div>
-<div class="pcs"><label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="hsResOn" ${h.reserve_on?"checked":""}>留給你</label><input type="range" id="hsRes" min="0" max="80" step="10" value="${h.reserve}"><b id="hsRV">${h.reserve}%</b></div>
-<div class="pcs"><span>優先</span><select id="hsPr">${[0,1,2,3,4,5,6,7,8,9,10].map(v=>`<option${v===h.prio?" selected":""}>${v}</option>`).join("")}</select>
-${left>0?`<button class="pill" data-hsb="0">取消先跑（剩 ${Math.ceil(left/60)} 分）</button>`:`<button class="pill" data-hsb="1">⏩ 這邊先跑 1 小時</button>`}</div>
-<div class="snote" style="margin:4px 0 0">Lv ${h.lv}。有工作就全力跑；你在用電腦時大家合起來最多 ${100-h.reserve}%；FusionStitch、SortCut 都在忙時照分配；${esc((h.boss||[]).join("、"))} 真的在跑時它 ${Math.round(h.boss_cap||80)}%、其他 ${Math.round(h.others_cap||5)}%。更多設定（誰參與）點右上角 Lv。</div>`:`<div class="snote">關著：兩邊各跑各的</div>`}</div>`;}
+function hsH(h){if(!h)return "";const M={alone:"照常跑",lead:"這邊先跑",yield:"讓別人先",split:"照分配"};
+  return `<div class="pcbox" data-lvopen="1" style="cursor:pointer"><div class="pchd"><b>🤝 握手 · Lv ${h.lv}</b><span class="snote" style="margin-left:auto">${h.on?esc(M[h.mode]||h.mode||""):"關著"} · 點這裡調整 ›</span></div><div class="snote">${esc(h.why||"")}</div></div>`;}
+document.addEventListener("click",e=>{if(e.target.closest&&e.target.closest("[data-lvopen]"))lvOpen();});
 function paceH(p){const M=[["full","🚀 全速"],["smart","🧠 智慧降速"],["manual","🐢 固定降速"]];
   return `<div class="pcbox"><div class="pchd"><b>⚡ 轉檔速度</b><span class="pcnow ${p.level<0.999?"slow":""}">${esc(p.label)}</span></div>
 <div class="pcm">${M.map(([k,t])=>`<button class="pill${p.mode===k?" on":""}" data-pmode="${k}">${t}</button>`).join("")}</div>
