@@ -3420,8 +3420,7 @@ class UpdatePage(DropPage):
             h += "<br>" + S["msg"]
         if c.get("newer"):
             h += (f"<br>🆕 <b>雲端有新版 V{S['ver']}</b>" + (f"（{S['date']}）" if S.get("date") else "")
-                  + ("　<b style='color:#ffb347'>⚠ 這次要換 EXE：程式會關掉再自動打開（約 1～2 分鐘），佇列從中斷處接著轉</b>"
-                     if c.get("need_shell") else "　熱更新，轉檔不中斷")
+                  + "　熱更新，轉檔不中斷"
                   + ("　· 已略過這版" if c.get("skipped") else ""))
             if S.get("notes"):
                 h += "<ul style='margin:2px 0'>" + "".join(f"<li>{n}</li>" for n in S["notes"][:8]) + "</ul>"
@@ -3432,7 +3431,7 @@ class UpdatePage(DropPage):
         self.cu_info.setText(h)
         self.cu_go.setVisible(bool(c.get("newer")) and not S["busy"])
         self.cu_go.setText(f"更新到 V{S.get('ver') or ''}")
-        self.cu_skip.setVisible(bool(c.get("newer")) and not c.get("need_shell") and not S["busy"])
+        self.cu_skip.setVisible(bool(c.get("newer")) and not S["busy"])
         self.cu_cancel.setVisible(bool(S.get("dl")))
 
     def _cu_check(self):
@@ -3451,10 +3450,6 @@ class UpdatePage(DropPage):
     def _cu_update(self):
         import cloudupd
         r = cloudupd.update()
-        if r.get("need_confirm"):
-            if QMessageBox.question(self, "換 EXE", r["message"] + "\n\n現在就更新？") != QMessageBox.Yes:
-                return
-            r = cloudupd.update(force=True)
         self.main.toast(r.get("message", ""), 8000)
 
     def fill_backups(self):
@@ -4095,10 +4090,7 @@ class MainWindow(QMainWindow):
             (q._save_now() if hasattr(q, "_save_now") else q.save())     # 關程式：馬上寫，不等合併
         try:
             import psutil
-            keep = set((getattr(QApplication.instance(), "_fs_cloud", None) or {}).get("keep_pids") or ())
             for ch in psutil.Process().children(recursive=True):
-                if ch.pid in keep:                  # the EXE swapper must outlive us
-                    continue
                 ch.kill()
         except Exception:
             pass

@@ -431,15 +431,14 @@ async function cuMount(box){if(!box)return;clearInterval(CUT);
     const c=S.chk||{};let h=`<h3>☁ 雲端更新</h3><div class="snote" style="margin:0 0 6px">目前 V${esc(S.cur)}（啟動器第 ${S.launcher} 版）。有新版只提示，按「更新」才下載（背景、不限速）。</div>`;
     if(S.dl){const d=S.dl,p=d.size?d.got/d.size*100:0;h+=`<div>⬇ 下載 ${esc(d.label)}：<b>${p.toFixed(0)}%</b>（${fmtB(d.got)} / ${fmtB(d.size||0)}，${fmtB(d.spd||0)}/s）</div><i class="pb"><u style="width:${p.toFixed(1)}%"></u></i>`;}
     else if(S.msg)h+=`<div>${esc(S.msg)}</div>`;
-    if(c.newer){h+=`<div style="margin-top:6px">🆕 <b>有新版 V${esc(S.ver)}</b>${S.date?`（${esc(S.date)}）`:""}　${c.need_shell?'<b style="color:#ffb347">⚠ 這次要換 EXE：程式會關掉再自動打開（約 1～2 分鐘），佇列從中斷處接著轉</b>':'熱更新，轉檔不中斷'}${c.skipped?" · 已略過這版":""}</div>`;
-      if(S.notes&&S.notes.length)h+=`<ul style="margin:4px 0 0 18px;padding:0">${S.notes.slice(0,8).map(n=>`<li>${esc(n)}</li>`).join("")}</ul>`;
-      if(c.need_shell&&S.busy_jobs&&S.busy_jobs.length)h+=`<div class="bwarn" style="margin-top:6px">現在有 ${S.busy_jobs.length} 支轉檔中／排隊：${S.busy_jobs.slice(0,10).map(b=>"#"+b.id+" "+esc(b.title)).join("、")}（建議等轉完再更新）</div>`;}
+    if(c.newer){h+=`<div style="margin-top:6px">🆕 <b>有新版 V${esc(S.ver)}</b>${S.date?`（${esc(S.date)}）`:""}　熱更新，轉檔不中斷${c.skipped?" · 已略過這版":""}</div>`;
+      if(S.notes&&S.notes.length)h+=`<ul style="margin:4px 0 0 18px;padding:0">${S.notes.slice(0,8).map(n=>`<li>${esc(n)}</li>`).join("")}</ul>`;}
     else if(c.t)h+=`<div style="margin-top:4px">${esc(c.message||(c.ok?"✓ 已經是最新版":""))}　<span class="snote">（${fmtClk(c.t)} 檢查）</span></div>`;
     h+=`<label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="cuOn"${S.on?" checked":""}> 自動檢查更新（開程式 1 分鐘後、之後每 6 小時）</label>`;
-    h+=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="pill" data-cu="check">☁ 檢查更新</button>${c.newer&&!S.busy?`${c.need_shell?"":`<button class="pill" data-cu="skip">${c.skipped?"已略過":"略過這版"}</button>`}<button class="pill" data-cu="update" style="background:#1d5c3a;border-color:#2e8b57;color:#fff">更新到 V${esc(S.ver)}</button>`:""}${S.dl?'<button class="pill" data-cu="cancel">取消下載</button>':""}</div>`;
+    h+=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="pill" data-cu="check">☁ 檢查更新</button>${c.newer&&!S.busy?`<button class="pill" data-cu="skip">${c.skipped?"已略過":"略過這版"}</button><button class="pill" data-cu="update" style="background:#1d5c3a;border-color:#2e8b57;color:#fff">更新到 V${esc(S.ver)}</button>`:""}${S.dl?'<button class="pill" data-cu="cancel">取消下載</button>':""}</div>`;
     box.innerHTML=h;};
   box.onclick=async e=>{const b=e.target.closest("[data-cu]");if(!b)return;const a=b.dataset.cu;
-    if(a==="update"){let r=await post("/api/cloud/update",{});if(r&&r.need_confirm){if(!confirm(r.message+"\n\n現在就更新？"))return;r=await post("/api/cloud/update",{force:true});}if(r&&r.message)toast(r.message);}
+    if(a==="update"){const r=await post("/api/cloud/update",{});if(r&&r.message)toast(r.message);}
     else{const r=await post("/api/cloud/"+a,{});if(r&&r.message)toast(r.message);}
     setTimeout(draw,a==="check"?2500:400);};
   box.onchange=async e=>{if(e.target.id==="cuOn"){const r=await post("/api/cloud/on",{on:e.target.checked});if(r&&r.message)toast(r.message);}};

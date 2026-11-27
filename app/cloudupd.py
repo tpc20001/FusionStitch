@@ -127,28 +127,6 @@ def _is_cert(ex) -> bool:
 
 
 # ---------------------------------------------------------------- check
-def busy_jobs() -> list[dict]:
-    """Conversions that are running or waiting (listed before the EXE is swapped)."""
-    out = []
-    try:
-        from PySide6.QtWidgets import QApplication
-        q = getattr(QApplication.instance(), "_fs_queue", None)
-        for j in (q.jobs if q else []):
-            if j.status in ("running", "queued"):
-                out.append({"id": j.id, "title": j.title, "status": j.status, "progress": round(j.progress, 3)})
-    except Exception:
-        pass
-    return out
-
-
-SHELL_SWAP = False    # 使用者決定（2026-11-19）：以後只熱更新、不再換 EXE。雲端打包也會先用使用者現在的 EXE 測過新程式
-
-
-def _need_shell(info: dict) -> bool:
-    """換 EXE 已經停用：永遠只熱更新程式（app 資料夾）。"""
-    return SHELL_SWAP and bool(info.get("shell")) and int(info.get("launcher") or 1) > launcher()
-
-
 def check(manual: bool = False) -> dict:
     """Read update.json (background thread). Only announces; never downloads."""
     st = _st()
@@ -168,17 +146,16 @@ def check(manual: bool = False) -> dict:
             if str(info.get("app") or "FusionStitch") != "FusionStitch" or not info.get("version"):
                 err = f"{u}：不是 FusionStitch 的 update.json"
                 continue
-            need_shell = _need_shell(info)
             newer_code = vkey(info["version"]) > vkey(core.APP_VERSION)
-            R = {"ok": True, "info": info, "url": u, "t": time.time(), "need_shell": need_shell,
-                 "newer_code": newer_code, "newer": newer_code or need_shell, "cur": core.APP_VERSION, "launcher": launcher()}
+            R = {"ok": True, "info": info, "url": u, "t": time.time(),
+                 "newer_code": newer_code, "newer": newer_code, "cur": core.APP_VERSION, "launcher": launcher()}
             break
         except Exception as ex:
             err = f"{type(ex).__name__}: {ex}"[:200]
     if R is None:
         R = {"ok": False, "newer": False, "t": time.time(), "cur": core.APP_VERSION, "message": "連不到 GitHub 更新：" + err}
     D = _store(last_t=time.time(), last_ok=R["ok"])
-    R["skipped"] = bool(R.get("newer") and D.get("skip") == (R.get("info") or {}).get("version") and not R.get("need_shell"))
+    R["skipped"] = bool(R.get("newer") and D.get("skip") == (R.get("info") or {}).get("version"))
     st["chk"] = R
     if R.get("newer") and not R["skipped"]:
         v = R["info"]["version"]
@@ -186,7 +163,7 @@ def check(manual: bool = False) -> dict:
         if manual or D.get("told") != key:
             _store(told=key)
             msg = f"雲端有新版 V{v}（現在 V{core.APP_VERSION}）" + \
-                  ("，這次要換 EXE（程式會關掉再自動打開）" if R["need_shell"] else "，可以熱更新、轉檔不中斷") + \
+                  "，可以熱更新、轉檔不中斷" + \
                   "：到「線上更新」或手機「版本與更新」按「更新」"
             log(msg)
             _announce(msg)
@@ -303,8 +280,7 @@ def update(force: bool = False) -> dict:
     info = R["info"]
     # the check may be older than a hot update that happened since: decide again with the running version
     R["newer_code"] = vkey(info["version"]) > vkey(core.APP_VERSION)
-    R["need_shell"] = _need_shell(info)
-    R["newer"] = R["newer_code"] or R["need_shell"]
+    R["newer"] = R["newer_code"]
     if not R["newer"]:
         return {"ok": False, "message": f"已經是最新 V{core.APP_VERSION}"}
     st.update(busy=True, cancel=False, msg="下載中…")
@@ -368,16 +344,14 @@ def status() -> dict:
     if c.get("ok") and c.get("info"):                     # re-judge against the running version (after a hot update)
         I_ = c["info"]
         c["newer_code"] = vkey(I_["version"]) > vkey(core.APP_VERSION)
-        c["need_shell"] = _need_shell(I_)
-        c["newer"] = c["newer_code"] or c["need_shell"]
+        c["newer"] = c["newer_code"]
     I = c.get("info") or {}
     dl = st.get("dl")
     return {"cur": core.APP_VERSION, "launcher": launcher(), "on": bool(core.cfg("cloud_on", True)),
             "busy": bool(st.get("busy")), "msg": st.get("msg") or "",
             "dl": {k: dl.get(k) for k in ("label", "got", "size", "spd")} if dl else None,
-            "chk": {k: c.get(k) for k in ("ok", "newer", "need_shell", "newer_code", "skipped", "t", "message")} if c else None,
-            "ver": I.get("version"), "date": I.get("date"), "notes": I.get("notes") or [],
-            "busy_jobs": []}
+            "chk": {k: c.get(k) for k in ("ok", "newer", "newer_code", "skipped", "t", "message")} if c else None,
+            "ver": I.get("version"), "date": I.get("date"), "notes": I.get("notes") or []}
 
 
 def after_start(win):
