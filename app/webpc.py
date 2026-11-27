@@ -360,13 +360,16 @@ def batch_set(body: dict) -> dict:
 def queue_state() -> dict:
     q = _queue()
     jobs_ = []
-    for j in (list(q.jobs) if q else []):
+    all_ = list(q.jobs) if q else []
+    # 中繼複製進度／整體進度只有「在轉的＋接下來 3 支」畫面上看得到：其他的不用每 2.5 秒去問硬碟
+    near = {j.id for j in all_ if j.status == "running"} | {j.id for j in [x for x in all_ if x.status == "queued"][:3]}
+    for j in all_:
         nb = getattr(j, "not_before", 0) or 0
         jobs_.append({"id": j.id, "title": j.title, "status": j.status, "progress": j.progress, "fps": j.fps,
                       "eta": j.eta, "message": j.message, "detail": getattr(j, "detail", ""),
                       "engine": getattr(j, "engine_desc", ""), "name": os.path.basename(j.output or ""),
                       "retry_in": max(0, int(nb - time.time())) if j.status == "queued" and nb > time.time() else 0,
-                      "batch": _bid(j), "out_dir": os.path.dirname(j.output or ""), "copy": _copy_of(j), "ov": _ov_of(j),
+                      "batch": _bid(j), "out_dir": os.path.dirname(j.output or ""), "copy": _copy_of(j) if j.id in near else None, "ov": _ov_of(j) if j.id in near else None,
                       "shot": _shot_of(j), "src": _src_of(j), "num": str(j.clip.get("num") or "")})
     relay = ""
     try:
