@@ -2879,6 +2879,16 @@ class PerfPage(QWidget):
                 self.disk_cards[letter] = c
             c.value_label.setText(f"讀 {d['read'] / 1048576:.0f}  寫 {d['write'] / 1048576:.0f} MB/s")
             c.spark.set_values(hist.get("disk_" + letter, []))
+            if time.time() - getattr(c, "_cap_t", 0) > 30:          # 容量 30 秒更新一次
+                c._cap_t = time.time()
+                try:
+                    import disks
+                    di = disks.info(f"{letter}:\\")
+                    head = " · ".join(x for x in (di.get("label") or "", di.get("kind") or "") if x)
+                    cap = f"剩 {fmt_bytes(di['free'])} / {fmt_bytes(di['total'])}" if di.get("total") else ""
+                    c.title_label.setText(f"磁碟 {letter}:　{head}　{cap}".rstrip())
+                except Exception:
+                    pass
 
 
 # ======================================================================== settings page
