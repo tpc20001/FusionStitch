@@ -98,7 +98,22 @@ def volume_label(root: str) -> str:
     return ""
 
 
+_INFO: dict = {}
+
+
 def info(path: str) -> dict:
+    """Drive facts (5 秒內同一顆硬碟重用：手機、電腦每幾秒都在問)."""
+    import time
+    k = drive(path) or path
+    hit = _INFO.get(k)
+    if hit and time.time() - hit[0] < 5:
+        return dict(hit[1])
+    out = _info_now(path)
+    _INFO[k] = (time.time(), out)
+    return dict(out)
+
+
+def _info_now(path: str) -> dict:
     """Drive facts for the folder pickers: {"drive", "kind", "model", "label", "total", "free"}."""
     import shutil
     L = drive(path)

@@ -112,7 +112,21 @@ def dest_dir(job) -> Path:
 
 
 
+_DONE_SZ: dict = {}
+_PEND: dict = {}
+
+
 def _pending_to(drive: str) -> float:
+    """（3 秒內重用）"""
+    hit = _PEND.get(drive)
+    if hit and time.time() - hit[0] < 3:
+        return hit[1]
+    v = _pending_to_now(drive)
+    _PEND[drive] = (time.time(), v)
+    return v
+
+
+def _pending_to_now(drive: str) -> float:
     """Bytes waiting on the SSD relay to be moved to this drive."""
     n = 0.0
     try:
@@ -204,11 +218,14 @@ def update(bids: list, dest: str | None = None, spares: list | None = None) -> d
 # ---------------------------------------------------------------- estimates for the queue page
 def _job_bytes(j, stats: dict) -> float:
     """Expected output size of a job (actual size once done)."""
-    if j.status == "done":
-        try:
-            return float(os.path.getsize(j.output))
-        except OSError:
-            return 0.0
+    if j.status == "done":                            # 完成的檔案大小不會變：記住，不用每次問硬碟
+        v = _DONE_SZ.get(j.id)
+        if v is None:
+            try:
+                v = _DONE_SZ[j.id] = float(os.path.getsize(j.output))
+            except OSError:
+                return 0.0
+        return v
     import history
     src = 0
     try:
