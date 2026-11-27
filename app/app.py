@@ -2961,7 +2961,7 @@ class SettingsPage(QWidget):
 
         g = QGroupBox("視窗與預覽")
         f = QFormLayout(g)
-        self.tray = QCheckBox("關閉視窗時縮到系統匣（轉檔繼續）"); self.tray.setChecked(bool(cfg("minimize_to_tray")))
+        self.tray = QCheckBox("按 ✕ 時縮到系統匣在背景執行（要結束：系統匣圖示按右鍵 →「結束 FusionStitch」）"); self.tray.setChecked(bool(cfg("minimize_to_tray")))
         self.tray.toggled.connect(lambda v: set_cfg("minimize_to_tray", v)); f.addRow("", self.tray)
         self.pf = QCheckBox("啟動時顯示效能浮窗"); self.pf.setChecked(bool(cfg("perf_float_start")))
         self.pf.toggled.connect(lambda v: set_cfg("perf_float_start", v)); f.addRow("", self.pf)
@@ -4036,7 +4036,7 @@ class MainWindow(QMainWindow):
         m.addAction("效能浮窗", lambda: self.set_float(not self.float_visible()))
         m.addAction("轉檔佇列", lambda: (self.show_main(), self.go(PAGE_QUEUE)))
         m.addSeparator()
-        m.addAction("結束", self.quit_app)
+        m.addAction("結束 FusionStitch", self.quit_app)
         self.tray.setContextMenu(m)
         self.tray.activated.connect(lambda r: self.show_main() if r in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick) else None)
         self.tray.show()
@@ -4058,11 +4058,15 @@ class MainWindow(QMainWindow):
         if self._handoff:
             e.accept()
             return
-        q = job_queue()
-        if q.busy() and cfg("minimize_to_tray") and not self._quitting:
+        # ✕ = 縮到系統匣在背景繼續（跟使用者其他軟體一樣）；真的要結束：系統匣圖示按右鍵 →「結束 FusionStitch」
+        if cfg("minimize_to_tray") is not False and not self._quitting and QSystemTrayIcon.isSystemTrayAvailable():
             e.ignore()
             self.hide()
-            self.tray_msg("FusionStitch 在背景繼續轉檔", "從系統匣圖示可以打開視窗或結束程式。")
+            if not getattr(self, "_tray_told", False):          # 每次開程式只提示一次
+                self._tray_told = True
+                busy = job_queue().busy()
+                self.tray_msg("FusionStitch 在背景執行" + ("（轉檔繼續）" if busy else ""),
+                              "點系統匣圖示打開視窗；要結束：圖示按右鍵 →「結束 FusionStitch」。")
             return
         e.ignore()
         self.quit_app()
