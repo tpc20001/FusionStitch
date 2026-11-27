@@ -82,13 +82,19 @@ def source_bytes(clip: dict) -> int:
     return n
 
 
+@_memoize
+def _by_name() -> dict:
+    d = {}
+    for r in records():                               # (後面的蓋前面的 → 最新的)
+        n = os.path.basename(r.get("output", "")).lower()
+        if n:
+            d[n] = r
+    return d
+
+
 def for_output(path: str) -> dict | None:
-    """Newest record of this output file (by name, so a moved file is still found)."""
-    name = os.path.basename(path).lower()
-    for r in reversed(records()):
-        if os.path.basename(r.get("output", "")).lower() == name:
-            return r
-    return None
+    """Newest record of this output file (by name, so a moved file is still found). 用名字索引，不再每次掃全部紀錄."""
+    return _by_name().get(os.path.basename(path).lower())
 
 
 def saving_text(src: int, out: int) -> str:

@@ -226,12 +226,18 @@ class OutputsPage(QWidget):
                     fs += scan(f)
                 except OSError:
                     pass
-            fs.sort(key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True)
+            mt = {}
+            for p in fs:                                  # 每個檔案只讀一次時間（硬碟上幾百個檔案時差很多）
+                try:
+                    mt[p] = p.stat().st_mtime
+                except OSError:
+                    mt[p] = 0
+            fs.sort(key=lambda p: mt[p], reverse=True)
         except OSError:
             return []
         if self.recent.isChecked():
             cut = time.time() - 86400
-            fs = [p for p in fs if p.stat().st_mtime >= cut]
+            fs = [p for p in fs if mt[p] >= cut]
         return fs
 
     def new_count(self) -> int:
