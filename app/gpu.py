@@ -189,6 +189,21 @@ vec3 lensTone(vec3 c, float row) {        // every channel by its own value, lik
 }
 """
 
+# BT.709 轉換（兩支 shader 共用同一段）
+_YUV_GLSL = """
+vec3 yuv2rgb(float y, vec2 c) {
+    c -= 0.5;
+    if (full == 0) { y = (y - 16.0 / 255.0) * 255.0 / 219.0; c *= 255.0 / 224.0; }
+    return vec3(y + 1.5748 * c.y, y - 0.1873 * c.x - 0.4681 * c.y, y + 1.8556 * c.x);
+}
+vec3 rgb2yuv(vec3 r) {                      // output is always limited range unless outFull
+    float y = dot(r, vec3(0.2126, 0.7152, 0.0722));
+    vec2 c = vec2((r.b - y) / 1.8556, (r.r - y) / 1.5748);
+    if (outFull == 0) { y = y * 219.0 / 255.0 + 16.0 / 255.0; c *= 224.0 / 255.0; }
+    return vec3(y, c + 0.5);
+}"""
+
+
 _FRAG_PROBE = """
 #version 430
 uniform sampler2D srcF, srcB;   // luma planes
@@ -263,18 +278,7 @@ uniform vec2 uVgF;                    // front lens 2^ev, vignette: gives the na
 uniform float uHalfFov;
 layout(location = 0) out vec4 color;      // Y plane, final code values
 layout(location = 1) out vec4 colorUV;    // U, V of this pixel (float), averaged 2x2 by _FRAG_CHROMA
-""" + _CUBIC + color.GLSL + SEAMGAIN_GLSL + """
-vec3 yuv2rgb(float y, vec2 c) {
-    c -= 0.5;
-    if (full == 0) { y = (y - 16.0 / 255.0) * 255.0 / 219.0; c *= 255.0 / 224.0; }
-    return vec3(y + 1.5748 * c.y, y - 0.1873 * c.x - 0.4681 * c.y, y + 1.8556 * c.x);
-}
-vec3 rgb2yuv(vec3 r) {                      // output is always limited range unless outFull
-    float y = dot(r, vec3(0.2126, 0.7152, 0.0722));
-    vec2 c = vec2((r.b - y) / 1.8556, (r.r - y) / 1.5748);
-    if (outFull == 0) { y = y * 219.0 / 255.0 + 16.0 / 255.0; c *= 224.0 / 255.0; }
-    return vec3(y, c + 0.5);
-}
+""" + _CUBIC + color.GLSL + SEAMGAIN_GLSL + _YUV_GLSL + """
 vec3 lensRGB(sampler2D ty, sampler2D tuv, vec2 p) {     // p = luma pixel coords
     return yuv2rgb(cubic(ty, p).r, cubic(tuv, (p + 0.5) * 0.5 - 0.5));
 }
@@ -358,18 +362,7 @@ uniform float uRS;                // rolling shutter: sensor readout time (s), 0
 layout(location = 0) out vec4 color;      // Y plane, final code values
 layout(location = 1) out vec4 colorUV;    // U, V of this pixel (float), averaged 2x2 by _FRAG_CHROMA
 const float PI = 3.14159265358979;
-""" + _CUBIC + color.GLSL + SEAM_GLSL + SEAMGAIN_GLSL + """
-vec3 yuv2rgb(float y, vec2 c) {
-    c -= 0.5;
-    if (full == 0) { y = (y - 16.0 / 255.0) * 255.0 / 219.0; c *= 255.0 / 224.0; }
-    return vec3(y + 1.5748 * c.y, y - 0.1873 * c.x - 0.4681 * c.y, y + 1.8556 * c.x);
-}
-vec3 rgb2yuv(vec3 r) {                      // output is always limited range unless outFull
-    float y = dot(r, vec3(0.2126, 0.7152, 0.0722));
-    vec2 c = vec2((r.b - y) / 1.8556, (r.r - y) / 1.5748);
-    if (outFull == 0) { y = y * 219.0 / 255.0 + 16.0 / 255.0; c *= 224.0 / 255.0; }
-    return vec3(y, c + 0.5);
-}
+""" + _CUBIC + color.GLSL + SEAM_GLSL + SEAMGAIN_GLSL + _YUV_GLSL + """
 vec3 outDir(vec2 fc) {                       // pixel centre -> view direction (row 0 = top)
     if (uProj == 2) {                        // uPlanetK = tan(horizontal fov / 2)
         vec2 p = vec2((fc.x / uOut.x * 2.0 - 1.0) * uPlanetK, (1.0 - fc.y / uOut.y * 2.0) * uPlanetK * uOut.y / uOut.x);
