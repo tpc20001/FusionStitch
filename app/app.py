@@ -2434,10 +2434,9 @@ class QueuePage(QWidget):
         top.addWidget(self.after)
         l.addLayout(top)
         # ⚙ 設定（中繼、成品、速度、握手、改名）收成一區，預設收合
-        from PySide6.QtWidgets import QSizePolicy, QToolButton
-        self.set_btn = QToolButton(); self.set_btn.setCheckable(True); self.set_btn.setObjectName("setfold")
-        self.set_btn.setToolButtonStyle(Qt.ToolButtonTextOnly); self.set_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.set_btn.setStyleSheet("QToolButton#setfold{text-align:left;padding:6px 10px;border:1px solid #252c35;border-radius:8px;background:#121821}")
+        self.set_btn = QPushButton(); self.set_btn.setCheckable(True); self.set_btn.setObjectName("setfold")
+        self.set_btn.setStyleSheet("QPushButton#setfold{text-align:left;padding:6px 10px;border:1px solid #252c35;border-radius:8px;background:#121821}"
+                                   "QPushButton#setfold:checked{background:#16222e}")
         l.addWidget(self.set_btn)
         self.qset = QWidget(); outer = l; l = QVBoxLayout(self.qset); l.setContentsMargins(4, 2, 0, 4)
         # where the footage is converted and where the result goes (can be changed any time)
