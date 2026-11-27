@@ -843,8 +843,7 @@ lvTick();setInterval(lvTick,3000);
 /* ================= 工具 ================= */
 const TOOLS=[["轉檔",[["bg","🖥","後台狀態","現在在轉什麼、排隊什麼、中繼 SSD，可以取消"],["queue","☰","轉檔佇列","暫停、繼續、置頂、重試、全部轉完後關機"],["outs","▸","成品","播放、下載、重新轉檔"]]],
  ["顏色",[["cm","🎨","原廠色彩對標","用一支原廠轉好的影片，學 GoPro Fusion Studio 的顏色"]]],
- ["電腦與紀錄",[["perf","📊","電腦效能","CPU、顯示卡、NVENC、硬碟、溫度、容量"],["logx","📋","LOG 與問題","自我檢查、最近的錯誤、自動處理紀錄、匯出 LOG"],["chv","🆕","版本與更新","📦 上傳更新包、⏪ 退回版本、這次更新了什麼（新的標 🆕）"]]],
- ["其他",[["edit","◉","預覽校正","下一階段：手機上預覽拼接、調色、入出點"]]]];
+ ["電腦與紀錄",[["perf","📊","電腦效能","CPU、顯示卡、NVENC、硬碟、溫度、容量"],["logx","📋","LOG 與問題","自我檢查、最近的錯誤、自動處理紀錄、匯出 LOG"],["chv","🆕","版本與更新","📦 上傳更新包、⏪ 退回版本、這次更新了什麼（新的標 🆕）"]]]];
 function toolName(k){for(const [,L] of TOOLS)for(const x of L)if(x[0]===k)return x[1]+" "+x[2];return "工具";}
 function viewTools(){$("#clk").textContent="";
   V().innerHTML=`<div class="tbgS" id="tbgS">🖥 後台狀態讀取中…</div>`+TOOLS.map(([g,L])=>`<div class="tgh">${g}</div><div class="wsGrid">${L.map(([k,ic,t,sub])=>`<button class="wsCard" data-tl="${k}"><i>${ic}</i><b>${t}</b><small>${sub}</small></button>`).join("")}</div>`).join("");
@@ -854,7 +853,6 @@ function viewTools(){$("#clk").textContent="";
 function viewTool(k){$("#clk").textContent="";V().onclick=null;
   V().innerHTML=`<div class="tlh"><button class="back" onclick="location.hash='tools'">‹</button><b>${toolName(k)}</b></div><div class="panel tool1"><div class="sbody" id="sbody"></div></div>`;
   const sb=$("#sbody");if(k==="cm")return drawCm(sb);if(k==="perf")drawPerf(sb);else if(k==="logx")drawLogx(sb);else if(k==="chv"){sb.innerHTML='<section class="ssec" id="cuBox"><h3>☁ 雲端更新</h3><div class="snote">讀取中…</div></section><section class="ssec"><h3>📦 上傳更新包</h3><div id="updIn"></div></section><div id="chvBox"></div>';cuMount($("#cuBox"));updInit();chvMount($("#chvBox"));}
-  else sb.innerHTML=`<h2 class="stt">◉ 預覽校正</h2><div class="snote">手機版的預覽校正（拼接預覽、調色、防震、入出點）是下一階段的功能。現在可以在素材庫用「✦ 全自動」：自動對齊、防震、判斷方向、白平衡與調色，再轉出。</div>`;}
 /* ================= 🎨 原廠色彩對標 ================= */
 async function drawCm(sb){let st,lib;try{[st,lib]=await Promise.all([J("/api/cm/status"),J("/api/library")]);}catch(e){sb.innerHTML=offline;return;}
   const clips=lib.clips.filter(c=>c.kind==="video"&&c.complete),L=st.last;
