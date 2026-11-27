@@ -1,4 +1,5 @@
-"""🎨 補上色彩標記（過渡用）: outputs made before V2.19.5 carry no colour tags (color_space=unknown),
+"""🧪 成品健檢的「補」：沒有色彩標記（V2.19.5 以前）或沒有 360 資訊的成品，原地補上（不重新轉檔）.
+Outputs made before V2.19.5 carry no colour tags (color_space=unknown),
 so YouTube and players have to guess and may pick BT.601. This writes the BT.709 / limited-range
 tags into the file in place, WITHOUT re-encoding: the picture and the sound stay bit-identical.
 
@@ -103,7 +104,7 @@ def start(paths: list[str]) -> dict:
             _S["busy"] = False
             _S["cur"] = ""
     threading.Thread(target=run, daemon=True, name="colortag").start()
-    return {"ok": True, "message": f"開始補上色彩標記：{len(paths)} 支（不重新轉檔，一支幾秒）"}
+    return {"ok": True, "message": f"開始修補 {len(paths)} 支：補上 360 資訊和色彩標記（不重新轉檔，一支幾秒）"}
 
 
 
