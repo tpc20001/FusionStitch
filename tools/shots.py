@@ -35,7 +35,7 @@ pump(3)
 for page in list(getattr(win, "nav_items", {}).keys()):
     try:
         win.go(page)
-        pump(1.5)
+        pump(4)
         win.grab().save(str(out / f"{page}.png"))
         print("shot", page, flush=True)
     except Exception as e:
