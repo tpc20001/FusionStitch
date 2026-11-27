@@ -105,8 +105,10 @@ class BatchBar(QFrame):
         self._badge_key = None
 
     def update_from(self, b: dict, collapsed: bool, selected: bool):
-        self.setProperty("run", "1" if b.get("running") else "0")
-        self.style().unpolish(self); self.style().polish(self)
+        run = "1" if b.get("running") else "0"
+        if self.property("run") != run:                 # 只有狀態變了才重新套樣式
+            self.setProperty("run", run)
+            self.style().unpolish(self); self.style().polish(self)
         self.tog.setText("▸" if collapsed else "▾")
         self.chk.blockSignals(True); self.chk.setChecked(selected); self.chk.blockSignals(False)
         self.title.setText("📁 " + b["title"])

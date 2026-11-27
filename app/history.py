@@ -70,8 +70,16 @@ def add(rec: dict):
             pass
 
 
+_SB: dict = {}
+
+
 def source_bytes(clip: dict) -> int:
-    """Size of the original footage of a clip (both lenses, all chapters, sound files)."""
+    """Size of the original footage of a clip (both lenses, all chapters, sound files).
+    手機每 3 秒問一次整個資料夾：同一組檔案 60 秒內不再去硬碟讀."""
+    k = tuple(f for key in ("front", "back", "wavs") for f in (clip.get(key) or []))
+    hit = _SB.get(k)
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
     n = 0
     for key in ("front", "back", "wavs"):
         for f in clip.get(key) or []:
@@ -79,6 +87,9 @@ def source_bytes(clip: dict) -> int:
                 n += os.path.getsize(f)
             except OSError:
                 pass
+    if len(_SB) > 5000:
+        _SB.clear()
+    _SB[k] = (time.time(), n)
     return n
 
 
