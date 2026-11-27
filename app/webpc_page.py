@@ -575,7 +575,8 @@ ${withJobs?`<div class="btj">${L.map(j=>JC(j,b)).join("")}</div>`:""}</div>`;ret
     return `<div class="qsec${cl?" cl":""}" data-qs="${id}"><div class="qsh" data-qt="${id}"><span class="btar">▾</span><b>${title}</b></div><div class="qsb">${body}</div></div>`;};
   h+=sec("tiles",`⏳ 排隊中（${WAIT.length} 支）`,WAIT.length?`<div class="tiles">${WAIT.map(TJ).join("")}</div>`:'<div class="snote">沒有排隊的影片</div>',true);
   if(ACT.length)h+=sec("batches",`📁 進行中的批次（${ACT.length}）`,ACT.map(b=>BC(b,false)).join(""),true);
-  if(OLD.length){const n=OLD.reduce((a,b)=>a+b.n,0);h+=sec("hist",`📜 歷史紀錄（已完成 ${OLD.length} 批、${n} 支）`,OLD.map(b=>BC(b,true)).join(""),false);}
+  if(OLD.length){const n=OLD.reduce((a,b)=>a+b.n,0),c=bcolGet(),op=c.has("o:q:hist")&&!c.has("q:hist");
+    h+=sec("hist",`📜 歷史紀錄（已完成 ${OLD.length} 批、${n} 支）`,op?OLD.map(b=>BC(b,true)).join(""):"",false);}
   if(!d.jobs.length)h+='<div class="empty">佇列是空的：到「素材庫」選素材加入</div>';
   const y=window.scrollY;host.innerHTML=h;const hh=document.getElementById("QHERO");if(hh)hh.innerHTML=hero;
   {const c=bcolGet();const se=host.querySelector('[data-qs="set"]');if(se&&!c.has("o:q:set"))se.classList.add("cl");}
@@ -587,7 +588,7 @@ ${withJobs?`<div class="btj">${L.map(j=>JC(j,b)).join("")}</div>`:""}</div>`;ret
       if(r.done){toast(r.message);viewQueue();return;}
       fsSheet(f,r);return;}
     const qt=e.target.closest("[data-qt]");if(qt&&!e.target.closest("button")){const id=qt.dataset.qt,el=qt.parentNode,c=bcolGet();const nowCl=!el.classList.contains("cl");el.classList.toggle("cl",nowCl);
-      c.delete("q:"+id);c.delete("o:q:"+id);c.add(nowCl?"q:"+id:"o:q:"+id);bcolSet(c);return;}
+      c.delete("q:"+id);c.delete("o:q:"+id);c.add(nowCl?"q:"+id:"o:q:"+id);bcolSet(c);if(id==="hist"&&!nowCl)viewQueue();return;}
     const hd=e.target.closest("[data-bt]");if(hd&&!e.target.closest("button")){const id=hd.dataset.bt,el=hd.parentNode,c=bcolGet();const nowCl=!el.classList.contains("cl");el.classList.toggle("cl",nowCl);
       c.delete(id);c.delete("o:"+id);c.add(nowCl?id:"o:"+id);bcolSet(c);return;}
     const b=e.target.closest("button");if(!b)return;
@@ -852,7 +853,7 @@ function viewTools(){$("#clk").textContent="";
     el.innerHTML=r||w?`🖥 後台：<b>▶ ${r} 個在跑 · ⏳ ${w} 個排隊</b> <span>看詳細 ›</span>`:`🖥 後台：現在沒有背景工作 ✔ <span>看詳細 ›</span>`;}).catch(()=>{});}
 function viewTool(k){$("#clk").textContent="";V().onclick=null;
   V().innerHTML=`<div class="tlh"><button class="back" onclick="location.hash='tools'">‹</button><b>${toolName(k)}</b></div><div class="panel tool1"><div class="sbody" id="sbody"></div></div>`;
-  const sb=$("#sbody");if(k==="cm")return drawCm(sb);if(k==="perf")drawPerf(sb);else if(k==="logx")drawLogx(sb);else if(k==="chv"){sb.innerHTML='<section class="ssec" id="cuBox"><h3>☁ 雲端更新</h3><div class="snote">讀取中…</div></section><section class="ssec"><h3>📦 上傳更新包</h3><div id="updIn"></div></section><div id="chvBox"></div>';cuMount($("#cuBox"));updInit();chvMount($("#chvBox"));}
+  const sb=$("#sbody");if(k==="cm")return drawCm(sb);if(k==="perf")drawPerf(sb);else if(k==="logx")drawLogx(sb);else if(k==="chv"){sb.innerHTML='<section class="ssec" id="cuBox"><h3>☁ 雲端更新</h3><div class="snote">讀取中…</div></section><section class="ssec"><h3>📦 上傳更新包</h3><div id="updIn"></div></section><div id="chvBox"></div>';cuMount($("#cuBox"));updInit();chvMount($("#chvBox"));}}
 /* ================= 🎨 原廠色彩對標 ================= */
 async function drawCm(sb){let st,lib;try{[st,lib]=await Promise.all([J("/api/cm/status"),J("/api/library")]);}catch(e){sb.innerHTML=offline;return;}
   const clips=lib.clips.filter(c=>c.kind==="video"&&c.complete),L=st.last;

@@ -48,6 +48,11 @@ jobs:
           python -m pip install --disable-pip-version-check -q "PySide6>=6.8,<7" "numpy>=1.26,<2.3" "opencv-python-headless>=4.9,<5" "scipy>=1.11" psutil "moderngl>=5.10" glcontext certifi pyinstaller
       - name: 檢查程式檔
         run: python -c "import py_compile,pathlib,json; [py_compile.compile(str(f), doraise=True) for f in list(pathlib.Path('app').glob('*.py'))+list(pathlib.Path('build').glob('*.py'))+list(pathlib.Path('tools').glob('*.py'))]; [json.loads(f.read_text(encoding='utf-8')) for f in pathlib.Path('app').glob('*.json')]; print('all program files OK')"
+      - name: 檢查手機網頁的 JavaScript（壞了就不發）
+        shell: bash
+        run: |
+          python -c "import re,sys;sys.path.insert(0,'app');import webpc_page as w;open('page_check.js','w',encoding='utf-8').write(chr(10).join(re.findall(r'<script>(.*?)</script>',w.PAGE,re.S)))"
+          node --check page_check.js && echo "phone page JS OK"
       - name: 打包 EXE（外殼）
         run: >
           python -m PyInstaller --noconfirm --clean --onedir --windowed --name FusionStitch --icon "${{ github.workspace }}\app\FusionStitch.ico"
