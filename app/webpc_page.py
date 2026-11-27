@@ -204,6 +204,7 @@ video{width:100%;border-radius:8px;background:#000;margin-top:6px}
 .calft{display:flex;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}.calsel{flex:1;color:var(--text);font-weight:700;font-size:13px;word-break:break-all}
 .calclr{background:var(--btn);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 14px}.calok{background:var(--accent);border:0;color:#fff;border-radius:10px;padding:9px 18px;font-weight:800}
 .lvb{--lc:#2ecc71;display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px 0 8px;border-radius:13px;border:1px solid color-mix(in srgb,var(--lc) 55%,transparent);background:color-mix(in srgb,var(--lc) 12%,transparent);color:var(--lc);font:700 12px/1 system-ui;cursor:pointer;margin-right:8px}
+@media(max-width:520px){#pcn{display:none}}
 @media(max-width:380px){.lvb .lvbars{display:none}.lvb{padding:0 7px;margin-right:2px}.lvm .lvrow{gap:6px}.lvm>div{padding:12px}}
 .lvb{flex:none}
 .lvb .lvbars{display:inline-flex;align-items:flex-end;gap:1.5px;height:16px}.lvb .lvbars i{width:3px;border-radius:1px;background:rgba(127,140,160,.35)}.lvb .lvbars i.on{background:var(--lc)}.lvb.off{--lc:#7f8a99}
@@ -316,11 +317,9 @@ async function viewQuick(){$("#clk").textContent="";const host=V();if(!S.qk)host
   const nm=x=>esc(x.split(/[\\/]/).filter(Boolean).pop()||x);
   const st=c=>c.status||(c.done?"✓ 已轉過":(c.complete?"未轉檔":"不完整"));
   const sel=good.filter(c=>QSEL.ids.has(c.id)).length;
-  const jobs=d.jobs.map(j=>{const fin=j.finish?`預計 ${fmtClk(j.finish)} 完成`:"";const p=(j.progress*100);
-    return `<div class="qkJ"><div class="qkJt"><b>${esc(j.title)}</b><em class="${j.status==="running"?"ok":""}">${j.status==="running"?(j.eta_ready?fin+"（剩 "+fd(j.finish-Date.now()/1000)+"）":"準備中…"):(j.status==="queued"?"排隊中 "+fin:"已暫停")}</em></div>
-    ${j.status==="running"?`<i class="qkP"><u style="width:${p.toFixed(1)}%"></u></i><small>${p.toFixed(1)}% · ${j.fps.toFixed(1)} 格/秒 · ${esc(j.detail)}</small>`:`<small>${esc(j.name)}</small>`}</div>`;}).join("");
-  const fin=d.all_finish?`<div class="qkTip ok" style="margin:0 0 6px">⏱ 預計 ${fmtClk(d.all_finish.at)} 全部完成（${d.all_finish.n} 支）</div>`:"";
-  if(same){document.getElementById("qkJobs").innerHTML=fin+(jobs||'<div class="qkTip info">目前沒有轉檔工作</div>');later(viewQuick,3000);return;}
+  const nRun=d.jobs.filter(j=>j.status==="running").length,nQ=d.jobs.filter(j=>j.status==="queued").length,rj=d.jobs.find(j=>j.status==="running");
+  const jobs=d.jobs.length?`<a class="qkSum" href="#queue"><b>🎬 ${nRun?`正在轉 ${nRun} 支`:"準備中"}${nQ?` · 排隊 ${nQ} 支`:""}</b>${rj?`<i class="qkP"><u style="width:${(rj.progress*100).toFixed(1)}%"></u></i><small>${esc(rj.title)} ${(rj.progress*100).toFixed(1)}% · ${rj.fps.toFixed(1)} 格/秒</small>`:""}${d.all_finish?`<small>⏱ 預計 ${fmtClk(d.all_finish.at)} 全部完成</small>`:""}<em>看轉檔佇列 ›</em></a>`:"";
+  if(same){document.getElementById("qkJobs").innerHTML=jobs;later(viewQuick,3000);return;}
   host.innerHTML=`<style>.qk{padding:10px 12px 90px;max-width:760px;margin:auto}.qkC{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}
 .qkH{color:#4dc9ff;font-weight:900;margin-bottom:6px}.qkPath{font-weight:800;color:var(--strong);word-break:break-all;margin:4px 0 8px}
 .qkRow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.qkRow button,.qkRow select{background:var(--btn);border:1px solid var(--line2);color:var(--text);border-radius:10px;padding:8px 12px;font:inherit}
@@ -332,27 +331,33 @@ async function viewQuick(){$("#clk").textContent="";const host=V();if(!S.qk)host
 .qkPb{border-color:#5a4520}.qkCatH{color:#ffb347;font-weight:800;margin:10px 0 2px}.qkWarn{color:#ffb347;font-size:20px;flex:none;width:22px;text-align:center}
 .qkPbB{display:flex;flex-direction:column;gap:6px;flex:none}.qkPbB button{background:var(--btn);border:1px solid var(--line2);color:var(--text);border-radius:8px;padding:5px 9px;font:inherit;font-size:13px}
 .qkEst{background:#0f1a24;border:1px solid #1e3346;border-radius:10px;padding:10px;margin-top:10px;line-height:1.6}
-@media(max-width:620px){.qk .qkCl{flex-wrap:wrap}.qk .qkCl small{flex:1 1 100%;order:9;text-align:left;padding-left:32px}.qk .qkTw,.qk .qkTh{width:132px;height:66px}.qk .qkMv,.qk .qkPbB{margin-left:auto}}.qkCl input{width:22px;height:22px;flex:none}.qkCl b{white-space:nowrap}.qkCl small{flex:1;text-align:right}.qkCl small{color:var(--sub)}
+@media(max-width:620px){.qk .qkCl{flex-wrap:wrap}.qk .qkI{flex:1 1 140px}.qk .qkTw,.qk .qkTh{width:132px;height:66px}.qk .qkMv,.qk .qkPbB{margin-left:auto}}.qkCl input{width:22px;height:22px;flex:none}.qkCl b{white-space:nowrap}.qkCl small{flex:1;text-align:right}.qkCl small{color:var(--sub)}
 .qkGo{display:block;width:100%;background:#e51e63;color:#fff;border:0;border-radius:12px;padding:14px;font:inherit;font-weight:900;font-size:17px;margin-top:10px}.qkGo:disabled{opacity:.45}
 .qkTip{font-size:13px;margin-top:6px}.qkTip.bad{color:#ff6577;font-weight:800}.qkTip.ok{color:#45d483}.qkTip.info{color:var(--sub)}
-.qkJ{padding:8px 0;border-top:1px solid var(--line)}.qkJ:first-child{border-top:0}.qkJt{display:flex;justify-content:space-between;gap:8px}.qkJt em{font-style:normal;color:var(--sub);font-size:13px}.qkJt em.ok{color:#45d483;font-weight:800}
-.qkP{display:block;height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:5px 0}.qkP u{display:block;height:100%;background:#2b8ad8}.qkJ small{color:var(--sub)}</style>
-<div class="qk">
-<div class="qkC"><div class="qkH">① 素材資料夾（電腦上的）</div><div class="qkPath">${esc(d.folder||"尚未選擇")}</div>
+.qkI{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;text-align:left}.qkDt{font-size:14px;color:#c8d3df}.qkDt b{font-size:17px;color:#fff;margin-left:2px}
+.qk .qkCl .qkI small,.qk .qkI{text-align:left;margin:0}.qkI small{color:var(--sub);font-size:12.5px}.qkE{color:#9fe3b8;font-weight:700}.qkS{opacity:.85}
+.qkSum{display:flex;flex-direction:column;gap:3px;text-decoration:none;color:var(--text);background:linear-gradient(180deg,#0f2436,#0c1824);border:1.5px solid #2b8ad8;border-radius:14px;padding:10px 12px;margin:10px 0}
+.qkSum b{color:#7cc4ff}.qkSum small{color:var(--sub)}.qkSum em{font-style:normal;color:#7cc4ff;font-size:13px;align-self:flex-end}
+.qkP{display:block;height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:3px 0}.qkP u{display:block;height:100%;background:#2b8ad8}
+.qkGo{position:sticky;bottom:10px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.qkH{display:flex;align-items:center;gap:8px;font-size:15.5px}
+@media(min-width:1000px){.qk{max-width:1180px;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:0 14px;align-items:start}
+ .qk>.qkL{grid-column:1;grid-row:2/span 6;position:sticky;top:8px}.qk>.qkC:not(.qkL){grid-column:2}}</style>
+<div class="qk"><div id="qkJobs" style="grid-column:1/-1">${jobs}</div>
+<div class="qkC qkL"><div class="qkH">① 素材資料夾（電腦上的）</div><div class="qkPath">${esc(d.folder||"尚未選擇")}</div>
 <div class="qkRow">${d.parent!=null&&d.folder?`<button data-up="${esc(d.parent)}">⬆ 上一層</button>`:""}<button id="qkPick">選擇其他資料夾…</button>
 ${d.recent.length?`<select id="qkRec"><option value="">最近用過…</option>${d.recent.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select>`:""}</div>
 ${d.dirs.length?`<div style="margin-top:8px">${d.dirs.map(x=>`<div class="qkD" data-go="${esc(x)}" style="display:flex;align-items:center;gap:10px"><input type="checkbox" data-dsel="${esc(x)}" ${QDSEL.has(x)?"checked":""} style="width:20px;height:20px;flex:none">📁 ${nm(x)}</div>`).join("")}</div>
 <div class="qkTip info" style="margin-top:8px">勾選多個資料夾 → 一次全部加入佇列（每個資料夾自己一批，用下面 ③ 的成品位置和格式；轉過的會略過）</div>
 <button class="pill" id="qkDGo" style="width:100%;margin-top:6px" ${QDSEL.size?"":"disabled"}>📂 勾選的 <b id="qkDN">${QDSEL.size}</b> 個資料夾全部加入佇列</button>`:""}</div>
-<div class="qkC"><div class="qkH" style="display:flex;align-items:center;gap:8px">② 影片（${good.length}${QHIDE&&nDone?`，藏了 ${nDone} 支已轉過`:""}）${nDone?`<label style="margin-left:auto;font-weight:400;font-size:13px;color:var(--sub);display:flex;gap:6px;align-items:center"><input type="checkbox" id="qkHide" ${QHIDE?"checked":""}>只看沒轉過的</label>`:""}</div>${good.length?good.map(c=>`<label class="qkCl"><input type="checkbox" data-id="${esc(c.id)}"${QSEL.ids.has(c.id)?" checked":""}${c.complete?"":" disabled"}><b>${esc(c.name)}</b>${qkImg(c)}<small>${esc(c.time||"")} · ${fd(c.duration)} · ${fmtB(c.size)}${c.est?` → 約 ${fmtB(c.est)}`:""} · ${c.done&&!c.status?`<span style="color:#45d483" title="${esc(c.done.how+"："+c.done.path)}">✓ 已轉過</span>`:esc(st(c))}</small><button class="qkMv" data-pm="${esc(c.id)}" title="移到問題檔案（先不轉）">⚠</button></label>`).join(""):'<div class="qkTip info">這裡沒有 GoPro Fusion 影片，請選放素材的資料夾</div>'}</div>
+<div class="qkC"><div class="qkH" style="display:flex;align-items:center;gap:8px">② 影片（${good.length}${QHIDE&&nDone?`，藏了 ${nDone} 支已轉過`:""}）${nDone?`<label style="margin-left:auto;font-weight:400;font-size:13px;color:var(--sub);display:flex;gap:6px;align-items:center"><input type="checkbox" id="qkHide" ${QHIDE?"checked":""}>只看沒轉過的</label>`:""}</div>${good.length?good.map(c=>`<label class="qkCl"><input type="checkbox" data-id="${esc(c.id)}"${QSEL.ids.has(c.id)?" checked":""}${c.complete?"":" disabled"}>${qkImg(c)}<span class="qkI"><span class="qkDt">${c.time?`${esc(c.time.slice(0,10).replace(/-/g,"/"))} <b>${esc(c.time.slice(11,16))}</b>`:`<b>${esc(c.name)}</b>`}</span><small>⏱ ${fd(c.duration)} · ${fmtB(c.size)}${c.est?` → <b class="qkE">約 ${fmtB(c.est)}</b>`:""}</small><small class="qkS">${c.done&&!c.status?`<span style="color:#45d483" title="${esc(c.done.how+"："+c.done.path)}">✓ 已轉過</span>`:esc(st(c))} · ${esc(c.name)}</small></span><button class="qkMv" data-pm="${esc(c.id)}" title="移到問題檔案（先不轉）">⚠</button></label>`).join(""):'<div class="qkTip info">這裡沒有 GoPro Fusion 影片，請選放素材的資料夾</div>'}</div>
 ${probs.length?`<div class="qkC qkPb"><div class="qkH" style="color:#ffb347">⚠ 問題檔案（${probs.length}）</div><div class="qkTip info">這些先不轉。原始檔案沒有被移動，只是集中在這裡，之後再分析。</div>${qkCats(probs).map(([lab,cs])=>`<div class="qkCatH">${esc(lab)}（${cs.length}）</div>`+cs.map(c=>`<div class="qkCl"><span class="qkWarn">⚠</span><b>${esc(c.name)}</b>${c.pair==="ok"?qkImg(c):""}<small>${esc(c.problem.detail||"")}<br>${esc(c.time||"")} · ${fd(c.duration)} · ${fmtB(c.size)}</small><span class="qkPbB"><button data-pc="${esc(c.id)}">重新讀取</button><button data-pr="${esc(c.id)}">移回清單</button></span></div>`).join("")).join("")}</div>`:""}
 <div class="qkC"><div class="qkH">③ 轉好的影片放在</div>
 <div class="qkRow"><select id="qkMode"><option value="beside"${d.out_mode!=="custom"?" selected":""}>素材資料夾裡的 stitched</option><option value="custom"${d.out_mode==="custom"?" selected":""}>固定的資料夾</option></select>${d.out_mode==="custom"?'<button id="qkOut">選擇…</button>':""}</div>
 <div class="qkPath">${esc(d.out||"")}</div><div class="qkTip ${esc(d.level)}">${esc(d.tip)}</div>
 <div class="qkRow" style="margin-top:8px"><button id="qkSsd" style="${d.relay_on?"background:#1d5c3a;color:#fff;border:0;font-weight:800":""}">SSD 加速：${d.relay_on?"開":"關"}</button><span class="qkTip info">${esc(d.relay)}</span></div>
 <div class="qkRow" style="margin-top:8px"><span class="qkTip info">輸出格式</span><select id="qkPre">${d.presets.map(p=>`<option value="${esc(p.key)}"${p.key===d.preset?" selected":""}>${esc(p.label)}</option>`).join("")}</select></div>
-<div id="qkEst">${qkEst(d)}</div><button class="qkGo" id="qkGo"${sel?"":" disabled"}>開始轉檔${sel?`（${sel} 個）`:""}</button></div>
-<div class="qkC"><div class="qkH">④ 轉檔中</div><div id="qkJobs">${fin}${jobs||'<div class="qkTip info">目前沒有轉檔工作</div>'}</div></div></div>`;
+<div id="qkEst">${qkEst(d)}</div><button class="qkGo" id="qkGo"${sel?"":" disabled"}>開始轉檔${sel?`（${sel} 個）`:""}</button></div></div>`;
   const open=async p=>{await act("/api/quick/open",{path:p});S.qk=null;S.qkSig="";QSEL=null;setTimeout(viewQuick,700);};
   host.onclick=async e=>{const t=e.target;
     const ds=t.closest("[data-dsel]");if(ds){if(ds.checked)QDSEL.add(ds.dataset.dsel);else QDSEL.delete(ds.dataset.dsel);const n=document.getElementById("qkDN");if(n)n.textContent=QDSEL.size;const b=document.getElementById("qkDGo");if(b)b.disabled=!QDSEL.size;return;}
